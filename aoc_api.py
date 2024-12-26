@@ -55,11 +55,11 @@ def create_prompt(model_family: str, model_name: str, puzzle_year: int, puzzle_d
     
     puzzle_prompt = aoc.puzzle_prose(puzzle_year, puzzle_day, puzzle_part)
 
-    prompt = system_prompt + '\n\n' + puzzle_prompt
+    full_prompt = system_prompt + '\n\n' + puzzle_prompt
 
     if previous_attempt_timed_out:
-        prompt += " Note: Previous attempts timed out. Use algorithms with good O(n) performance, and techniques such as @cache to make the program run faster. The input may be very large."
-    return ("success", prompt)
+        full_prompt += " Note: Previous attempts timed out. Use algorithms with good O(n) performance, and techniques such as @cache to make the program run faster. The input may be very large."
+    return ("success", full_prompt)
 
 def generate_program(model_family: str, model_name: str, full_prompt: str, puzzle_year: int, puzzle_day: int, puzzle_part: int) -> Tuple[str, str]:
     """Generates a program using the given arguments.
@@ -83,9 +83,11 @@ def generate_program(model_family: str, model_name: str, full_prompt: str, puzzl
         text = gemini.generate(model_name, full_prompt)
         return ('success', text)
     except Exception as e:
-        # Assume it's a quota issue.
-        # Quota issues are AssertionErrors that mention 429
-        return ('quota', str(e))
+        exception_str = str(e)
+        if "Quota exceeded" in exception_str:
+            # Assume it's a quota issue.
+            return ('quota', exception_str)
+        return ('error', exception_str)
 
 def run_program(puzzle_year: int, puzzle_day: int, puzzle_part: int, program: str, timeout: int) -> Tuple[str, Union[str, int]]:
     """Tests the program in a safe environment.

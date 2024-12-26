@@ -2,3 +2,5 @@
 aoc_results.db
 __pycache__
 report.csv
+stderr.txt
+stdout.txt
