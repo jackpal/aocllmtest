@@ -1,5 +1,14 @@
 from aocd.models import Puzzle
 
+def puzzle_solved(puzzle_year, puzzle_day, puzzle_part):
+    puzzle = Puzzle(year=puzzle_year, day=puzzle_day)
+    if puzzle_part == 1:
+        return puzzle.answered_a
+    elif puzzle_part == 2:
+        return puzzle.answered_b
+    else:
+        raise Exception(f'Unknown part {puzzle_part}')
+
 def puzzle_prose(puzzle_year, puzzle_day, puzzle_part):
     return Puzzle(year=puzzle_year, day=puzzle_day)._get_prose()
 

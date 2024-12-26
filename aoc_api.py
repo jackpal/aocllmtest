@@ -45,16 +45,20 @@ def create_prompt(model_family: str, model_name: str, puzzle_year: int, puzzle_d
             - ('sequence', (year, day, part))
             - ('success', <prompt>)
     """
-    # Simulate some logic for sequence checking and prompt generation
-    if puzzle_year == 2023 and puzzle_day == 1 and puzzle_part == 2:
-         return ("sequence", (2023, 1, 1))
-    elif puzzle_year == 2024 and puzzle_day == 5 and puzzle_part == 2:
-         return ("sequence", (2024, 5, 1))
-
     
-    prompt = f"Solve Advent of Code {puzzle_year}, Day {puzzle_day}, Part {puzzle_part} using {model_family} {model_name}."
+    if puzzle_part > 1:
+        precursor_puzzle_part = puzzle_part-1
+        if not aoc.puzzle_solved(puzzle_year, puzzle_day, precursor_puzzle_part):
+            return ('sequence', (puzzle_year, puzzle_day, precursor_puzzle_part))
+    
+    system_prompt = prompt.system_prompt()
+    
+    puzzle_prompt = aoc.puzzle_prose(puzzle_year, puzzle_day, puzzle_part)
+
+    prompt = system_prompt + '\n\n' + puzzle_prompt
+
     if previous_attempt_timed_out:
-        prompt += " Note: Previous attempts timed out."
+        prompt += " Note: Previous attempts timed out. Use algorithms with good O(n) performance, and techniques such as @cache to make the program run faster. The input may be very large."
     return ("success", prompt)
 
 def generate_program(model_family: str, model_name: str, full_prompt: str, puzzle_year: int, puzzle_day: int, puzzle_part: int) -> Tuple[str, str]:
@@ -74,25 +78,14 @@ def generate_program(model_family: str, model_name: str, full_prompt: str, puzzl
             - ('quota', <quota message>)
             - ('success', <generated program>)
     """
-    # Simulate some logic for program generation and quota errors
-    if model_family == "FamilyB" and puzzle_year == 2023 and puzzle_day == 2:
-        return ("quota", "Quota exceeded for FamilyB. Try again later.")
-    
-    if model_family == "FamilyA" and puzzle_year < 2018:
-        return ("error", f"{model_family} does not support years before 2018")
-
-    program = f"""
-# Generated program for {puzzle_year}, Day {puzzle_day}, Part {puzzle_part}
-# using {model_family} {model_name}
-
-def solve():
-    # Simulated solution
-    return "{puzzle_year}-{puzzle_day}-{puzzle_part} solved by {model_name}"
-
-if __name__ == "__main__":
-    print(solve())
-"""
-    return ("success", program)
+    assert(model_family == 'Gemini')
+    try:
+        text = gemini.generate(model_name, full_prompt)
+        return ('success', text)
+    except Exception as e:
+        # Assume it's a quota issue.
+        # Quota issues are AssertionErrors that mention 429
+        return ('quota', str(e))
 
 def run_program(puzzle_year: int, puzzle_day: int, puzzle_part: int, program: str, timeout: int) -> Tuple[str, Union[str, int]]:
     """Tests the program in a safe environment.
@@ -125,27 +118,6 @@ def run_program(puzzle_year: int, puzzle_day: int, puzzle_part: int, program: st
         return('answer', answer)
     else:
         raise Exception(f'Unknown result {result}')
-
-    # Simulate running the program and potential timeouts
-    asse
-    
-    if "timeout" in program:
-      if timeout < 1000:
-        return ("timeout", timeout)
-      else:
-        return ("error", "Program still timed out after multiple attempts with increasing timeouts.")
-        
-    
-    
-    if "error" in program:
-      return ("error", "Program failed with an error.")
-    else:
-      # Simulate successful execution and extract the result
-      lines = program.split('\n')
-      for line in lines:
-        if "return" in line:
-            return ("success", line.split('"')[1])
-      return ("success", "Program ran successfully, but did not produce the expected output format")
 
 def check_answer(puzzle_year: int, puzzle_day: int, puzzle_part: int, answer: str) -> bool:
     """Checks if the given answer is correct for the given puzzle.
