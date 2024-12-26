@@ -2,7 +2,7 @@ import aoc
 import gemini
 import perform
 import prompt
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 def model_families() -> List[str]:
     """
@@ -28,99 +28,111 @@ def models(model_family: str) -> List[str]:
     else:
         return []
 
-def create_prompt(model_family: str, model_name: str, puzzle_year: int, puzzle_day: int, puzzle_part: int, puzzle_prose: str, previous_attempt_timed_out: bool) -> Tuple[str, str]:
-    """
-    Creates a prompt suitable for solving the given puzzle.
+def create_prompt(model_family: str, model_name: str, puzzle_year: int, puzzle_day: int, puzzle_part: int, previous_attempt_timed_out: bool) -> Tuple[str, Union[str, Tuple[int, int, int]]]:
+    """Creates a prompt suitable for solving the given puzzle.
 
     Args:
-        model_family (str): The model family.
-        model_name (str): The model name.
+        model_family (str): The name of the model family.
+        model_name (str): The name of the model.
         puzzle_year (int): The year of the puzzle.
         puzzle_day (int): The day of the puzzle.
         puzzle_part (int): The part of the puzzle (1 or 2).
-        puzzle_prose (str): The text description of the puzzle.
         previous_attempt_timed_out (bool): True if a previous attempt to solve this puzzle timed out, False otherwise.
 
     Returns:
-        Tuple[str, str]: A tuple where the first element is a status string 
-                        ('error', 'sequence', or 'success') and the second element 
-                        is either an error message, a sequence message, or the generated prompt.
+        Tuple[str, Union[str, Tuple[int, int, int]]]: A tuple indicating the result of the prompt creation:
+            - ('error', <error message>)
+            - ('sequence', (year, day, part))
+            - ('success', <prompt>)
     """
-    # Replace this with your actual prompt generation logic
-    if puzzle_prose is None:
-        return "error", "Puzzle prose is missing."
+    # Simulate some logic for sequence checking and prompt generation
+    if puzzle_year == 2023 and puzzle_day == 1 and puzzle_part == 2:
+         return ("sequence", (2023, 1, 1))
+    elif puzzle_year == 2024 and puzzle_day == 5 and puzzle_part == 2:
+         return ("sequence", (2024, 5, 1))
 
+    
+    prompt = f"Solve Advent of Code {puzzle_year}, Day {puzzle_day}, Part {puzzle_part} using {model_family} {model_name}."
     if previous_attempt_timed_out:
-        prompt = f"Solve Advent of Code {puzzle_year}, Day {puzzle_day}, Part {puzzle_part}. Previous attempt timed out. Puzzle Description: {puzzle_prose}"
-    else:
-        prompt = f"Solve Advent of Code {puzzle_year}, Day {puzzle_day}, Part {puzzle_part}. Puzzle Description: {puzzle_prose}"
-
-    return "success", prompt
+        prompt += " Note: Previous attempts timed out."
+    return ("success", prompt)
 
 def generate_program(model_family: str, model_name: str, full_prompt: str, puzzle_year: int, puzzle_day: int, puzzle_part: int) -> Tuple[str, str]:
-    """
-    Generates a program using the given arguments.
+    """Generates a program using the given arguments.
 
     Args:
-        model_family (str): The model family.
-        model_name (str): The model name.
-        full_prompt (str): The complete prompt for the model.
+        model_family (str): The name of the model family.
+        model_name (str): The name of the model.
+        full_prompt (str): The full prompt for the model.
         puzzle_year (int): The year of the puzzle.
         puzzle_day (int): The day of the puzzle.
         puzzle_part (int): The part of the puzzle (1 or 2).
 
     Returns:
-        Tuple[str, str]: A tuple where the first element is a status string 
-                        ('error', 'quota', or 'success') and the second element 
-                        is either an error message, a quota message, or the generated program.
+        Tuple[str, str]: A tuple indicating the result of the program generation:
+            - ('error', <error message>)
+            - ('quota', <quota message>)
+            - ('success', <generated program>)
     """
-    # Replace this with your actual program generation logic (e.g., API call to a model)
-    if model_family == "family_that_hits_quota":
-        return "quota", "Quota limit reached for this model family."
+    # Simulate some logic for program generation and quota errors
+    if model_family == "FamilyB" and puzzle_year == 2023 and puzzle_day == 2:
+        return ("quota", "Quota exceeded for FamilyB. Try again later.")
     
-    if model_family == "family_with_errors":
-        return "error", "An error occurred during program generation."
+    if model_family == "FamilyA" and puzzle_year < 2018:
+        return ("error", f"{model_family} does not support years before 2018")
 
-    # Simulate generating a program
     program = f"""
-# Generated program for Advent of Code {puzzle_year}, Day {puzzle_day}, Part {puzzle_part}
+# Generated program for {puzzle_year}, Day {puzzle_day}, Part {puzzle_part}
+# using {model_family} {model_name}
+
 def solve():
-    # Placeholder for puzzle-solving logic
-    print("This is a placeholder program.")
-    print("Model: {model_family} {model_name}")
-    print("Year: {puzzle_year}, Day: {puzzle_day}, Part: {puzzle_part}")
-    return "42" 
+    # Simulated solution
+    return "{puzzle_year}-{puzzle_day}-{puzzle_part} solved by {model_name}"
 
-solve()
+if __name__ == "__main__":
+    print(solve())
 """
-    return "success", program
+    return ("success", program)
 
-def run_program(program: str, timeout: int) -> Tuple[str, str | int]:
-    """
-    Tests the program in a safe environment.
+def run_program(program: str, timeout: int) -> Tuple[str, Union[str, int]]:
+    """Tests the program in a safe environment.
 
     Args:
-        program (str): The program to run.
-        timeout (int): The time in seconds that the program is allowed to run before timing out.
+        program (str): The program code to run.
+        timeout (int): The timeout in seconds.
 
     Returns:
-        Tuple[str, str | int]: A tuple where the first element is a status string 
-                             ('error', 'timeout', or 'success') and the second 
-                             element is either an error message, the timeout value, or the output of the program.
+        Tuple[str, Union[str, int]]: A tuple indicating the result of running the program:
+            - ('error', <error message>)
+            - ('timeout', <int timeout value>)
+            - ('success', <output of program>)
     """
-    # Replace this with your actual program execution logic (e.g., using a sandbox)
+    assert(program)
+    assert(timeout > 0)
+    input = aoc.input(puzzle_year, puzzle_day)
+    # Simulate running the program and potential timeouts
+    asse
     
-    # Simulate running the program with potential timeout or error
     if "timeout" in program:
-        return "timeout", timeout
-    elif "error" in program:
-        return "error", "Runtime error in program."
+      if timeout < 1000:
+        return ("timeout", timeout)
+      else:
+        return ("error", "Program still timed out after multiple attempts with increasing timeouts.")
+        
+    
+    
+    if "error" in program:
+      return ("error", "Program failed with an error.")
     else:
-        return "success", "42"
+      # Simulate successful execution and extract the result
+      lines = program.split('\n')
+      for line in lines:
+        if "return" in line:
+            return ("success", line.split('"')[1])
+      return ("success", "Program ran successfully, but did not produce the expected output format")
 
 def check_answer(puzzle_year: int, puzzle_day: int, puzzle_part: int, answer: str) -> bool:
-    """
-    Checks if the given answer is correct for the given puzzle.
+    """Checks if the given answer is correct for the given puzzle.
 
     Args:
         puzzle_year (int): The year of the puzzle.
@@ -131,6 +143,4 @@ def check_answer(puzzle_year: int, puzzle_day: int, puzzle_part: int, answer: st
     Returns:
         bool: True if the answer is correct, False otherwise.
     """
-    # Replace this with your actual answer checking logic (e.g., against a known solution)
-    # For demonstration, let's assume the answer "42" is always correct
-    return answer == "42"
+    return aoc.check_answer(puzzle_year, puzzle_day, puzzle_part, answer)
