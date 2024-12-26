@@ -33,6 +33,7 @@
     <p>Completed: <span id="completed-count"></span></p>
     <p>Remaining: <span id="remaining-count"></span></p>
     <p>Current Status: <span id="current-status"></span></p>
+    <p>Time Until Quota Reset: <span id="time-until-reset"></span></p>
 
     <h2>Model Family Rankings</h2>
     <div id="model-family-rankings-plot" style="height: 400px;"></div>
@@ -80,6 +81,7 @@
                     document.getElementById('completed-count').textContent = data.completed;
                     document.getElementById('remaining-count').textContent = data.remaining;
                     document.getElementById('current-status').textContent = data.current_status; // Update current status
+                    document.getElementById('time-until-reset').textContent = data.time_until_reset;
                 });
         }
 

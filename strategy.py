@@ -3,6 +3,7 @@ import db
 import aoc_api
 import time
 from typing import List, Tuple, Dict
+import datetime
 
 def get_next_experiment() -> Tuple:
     """Determines the next experiment to run based on the defined strategy.
@@ -19,14 +20,30 @@ def get_next_experiment() -> Tuple:
         incomplete_experiments.sort(key=lambda x: x[10] if x[10] is not None else 0) 
         experiment = incomplete_experiments[0]
         return (experiment[1], experiment[2], experiment[3], experiment[4], experiment[5], experiment[10], experiment[13])
-    
+
+    # Get available model families, excluding those with exceeded quotas
     quota_exceeded_families = db.get_quota_exceeded_families()
-
-    # 1. Get available model families and models
     available_model_families = [fam for fam in aoc_api.model_families() if fam not in quota_exceeded_families]
-
+    
+    # If all model families have exceeded their quota, find the earliest time to check again
     if not available_model_families:
-        print("All model families have exceeded their quota. Waiting...")
+        earliest_check_time = db.get_earliest_quota_reset_time()
+        if earliest_check_time:
+            # Make sure we are using an offset-aware datetime object here.
+            now = datetime.datetime.now(datetime.timezone.utc)
+            time_to_wait = earliest_check_time - now
+            wait_seconds = max(0, time_to_wait.total_seconds())
+            
+            print(f"All model families have exceeded their quota. Waiting until {earliest_check_time.strftime('%Y-%m-%d %H:%M:%S')}...")
+            
+            # Update the status message to indicate the wait time
+            global current_status
+            current_status = f"Waiting until {earliest_check_time.strftime('%Y-%m-%d %H:%M:%S')} for quota to reset"
+
+            time.sleep(wait_seconds)
+        else:
+            print("No quota information found. Waiting for 60 seconds...")
+            time.sleep(60)
         return None
     
     
@@ -165,8 +182,27 @@ def run_all_experiments() -> None:
     while True:
         next_experiment = get_next_experiment()
         if next_experiment is None:
-            print("No more experiments to run at the moment.")
-            time.sleep(60) # Wait for a minute before checking again, in case quota limits reset
-            
+            # If get_next_experiment returned None, it means there's nothing to do right now.
+            # Check if this is due to quota limits.
+            earliest_check_time = db.get_earliest_quota_reset_time()
+            if earliest_check_time:
+                # Make sure we are using an offset-aware datetime object here.
+                now = datetime.datetime.now(datetime.timezone.utc)
+                time_to_wait = earliest_check_time - now
+                wait_seconds = max(0, time_to_wait.total_seconds())
+                
+                print(f"All model families have exceeded their quota. Waiting until {earliest_check_time.strftime('%Y-%m-%d %H:%M:%S')}...")
+                
+                # Update the status message to indicate the wait time
+                global current_status
+                current_status = f"Waiting until {earliest_check_time.strftime('%Y-%m-%d %H:%M:%S')} for quota to reset"
+
+                time.sleep(wait_seconds)
+            else:
+                # No quota limit found, but still nothing to do. Wait for a shorter period.
+                print("No experiments to run at the moment. Waiting for 60 seconds...")
+                current_status = "No experiments to run at the moment. Waiting for 60 seconds..."
+                time.sleep(60)
         else:
+            # Run the experiment
             run_experiment(*next_experiment)

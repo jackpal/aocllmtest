@@ -1,6 +1,7 @@
 # webserver.py
 from flask import Flask, render_template, jsonify
 import db
+import datetime
 
 app = Flask(__name__)
 
@@ -16,10 +17,19 @@ def index():
 def status():
     """Provides data for the status of the experiments."""
     completed_count, remaining_count = db.count_experiments()
+
+    earliest_check_time = db.get_earliest_quota_reset_time()
+    if earliest_check_time:
+        time_until_reset = earliest_check_time - datetime.datetime.now().astimezone(earliest_check_time.tzinfo)
+        time_until_reset_str = str(time_until_reset).split(".")[0]  # Format as HH:MM:SS
+    else:
+        time_until_reset_str = "N/A"
+
     return jsonify({
         "completed": completed_count,
         "remaining": remaining_count,
-        "current_status": current_status()  # Call the function to get the current status
+        "current_status": current_status(),
+        "time_until_reset": time_until_reset_str
     })
 
 @app.route("/rankings/model_families")

@@ -1,6 +1,7 @@
 # db.py
 import sqlite3
 from typing import List, Tuple, Dict, Any
+import datetime
 
 DATABASE_NAME = "aoc_results.db"
 
@@ -288,3 +289,29 @@ def get_all_experiments() -> List[Tuple]:
     all_experiments = cursor.fetchall()
     conn.close()
     return all_experiments
+
+def get_earliest_quota_reset_time() -> datetime.datetime | None:
+    """Gets the earliest time at which a quota will reset for any model family.
+
+    Returns:
+        A datetime object representing the earliest quota reset time, or None if no quota information is found.
+    """
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT MIN(last_quota_exceeded)
+        FROM quota_limits
+        WHERE last_quota_exceeded >= datetime('now', '-1 hour')
+    """)
+    result = cursor.fetchone()[0]
+    conn.close()
+    
+    if result:
+        # The time returned by sqlite is in UTC
+        reset_time = datetime.datetime.strptime(result, '%Y-%m-%d %H:%M:%S') + datetime.timedelta(hours=1)
+        # Make it timezone-aware (UTC)
+        reset_time = reset_time.replace(tzinfo=datetime.timezone.utc)
+        return reset_time
+    else:
+        return None

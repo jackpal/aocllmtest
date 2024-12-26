@@ -1,5 +1,6 @@
 # main.py
 import argparse
+import datetime
 import db
 import strategy
 import webserver
@@ -36,9 +37,26 @@ def run_experiments_thread():
     while True:
         next_experiment = strategy.get_next_experiment()
         if next_experiment is None:
-            current_status = "Waiting for quota timeout or new experiments"
-            print("No more experiments to run at the moment.")
-            time.sleep(60) # Wait for a minute before checking again
+            # If get_next_experiment returned None, it means there's nothing to do right now.
+            # Check if this is due to quota limits.
+            earliest_check_time = db.get_earliest_quota_reset_time()
+            if earliest_check_time:
+                # Make sure we are using an offset-aware datetime object here.
+                now = datetime.datetime.now(datetime.timezone.utc)
+                time_to_wait = earliest_check_time - now
+                wait_seconds = max(0, time_to_wait.total_seconds())
+                
+                print(f"All model families have exceeded their quota. Waiting until {earliest_check_time.strftime('%Y-%m-%d %H:%M:%S')}...")
+                
+                # Update the status message to indicate the wait time
+                current_status = f"Waiting until {earliest_check_time.strftime('%Y-%m-%d %H:%M:%S')} for quota to reset"
+
+                time.sleep(wait_seconds)
+            else:
+                # No quota limit found, but still nothing to do. Wait for a shorter period.
+                print("No experiments to run at the moment. Waiting for 60 seconds...")
+                current_status = "No experiments to run at the moment. Waiting for 60 seconds..."
+                time.sleep(60)
         else:
             model_family, model_name, year, day, part, timeout, previous_attempt_timed_out = next_experiment
             current_status = f"Running: {model_family} {model_name}, Year: {year}, Day: {day}, Part: {part}, Timeout: {timeout}, Previous Attempt Timed Out: {previous_attempt_timed_out}"
