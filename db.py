@@ -112,7 +112,8 @@ def get_experiment_by_id(experiment_id: int) -> Tuple:
     return experiment
 
 def get_incomplete_experiments() -> List[Tuple]:
-    """Retrieves all experiments that have not been completed yet.
+    """Retrieves all experiments that have not been completed yet, excluding those
+    where the associated model family's quota has been exceeded within the last hour.
 
     Returns:
         A list of tuples, where each tuple represents an incomplete experiment.
@@ -120,7 +121,16 @@ def get_incomplete_experiments() -> List[Tuple]:
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM experiments WHERE result IS NULL")
+    cursor.execute("""
+        SELECT * 
+        FROM experiments
+        WHERE result IS NULL
+        AND model_family NOT IN (
+            SELECT model_family
+            FROM quota_limits
+            WHERE last_quota_exceeded >= datetime('now', '-1 hour')
+        )
+    """)
     experiments = cursor.fetchall()
 
     conn.close()

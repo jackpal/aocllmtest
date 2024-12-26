@@ -84,7 +84,7 @@ def generate_program(model_family: str, model_name: str, full_prompt: str, puzzl
         return ('success', text)
     except Exception as e:
         exception_str = str(e)
-        if "Quota exceeded" in exception_str:
+        if "429" in exception_str:
             # Assume it's a quota issue.
             return ('quota', exception_str)
         return ('error', exception_str)
