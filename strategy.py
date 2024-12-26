@@ -113,25 +113,25 @@ def run_experiment(model_family: str, model_name: str, year: int, day: int, part
     else:
         full_prompt = prompt_result[1]
 
-    # 2. Add experiment to database
-    experiment_id = db.add_experiment(model_family, model_name, year, day, part, full_prompt, previous_attempt_timed_out)
-        
-
-    # 3. Generate program
+    # 2. Generate program
     program_result = aoc_api.generate_program(model_family, model_name, full_prompt, year, day, part)
 
     if program_result[0] == 'error':
         print(f"Error generating program: {program_result[1]}")
+        db.add_experiment(model_family, model_name, year, day, part, full_prompt, previous_attempt_timed_out)
+        experiment_id = db.sqlite3.connect(db.DATABASE_NAME).cursor().lastrowid
         db.update_experiment(experiment_id, None, 'error', None, None, None, program_result[1])
         return
     elif program_result[0] == 'quota':
         print(f"Quota exceeded for {model_family}: {program_result[1]}")
         db.record_quota_exceeded(model_family)
-        db.update_experiment(experiment_id, None, 'quota', None, None, None, program_result[1])
-
+        # Do not add an entry to the experiments table
         return
     else:
         generated_program = program_result[1]
+
+    # 3. Add experiment to database
+    experiment_id = db.add_experiment(model_family, model_name, year, day, part, full_prompt, previous_attempt_timed_out)
 
     # 4. Run program
     run_result = aoc_api.run_program(year, day, part, generated_program, timeout) # Pass year, day, and part to run_program
