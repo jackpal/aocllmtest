@@ -94,10 +94,13 @@ if __name__ == "__main__":
 """
     return ("success", program)
 
-def run_program(program: str, timeout: int) -> Tuple[str, Union[str, int]]:
+def run_program(puzzle_year: int, puzzle_day: int, puzzle_part: int, program: str, timeout: int) -> Tuple[str, Union[str, int]]:
     """Tests the program in a safe environment.
 
     Args:
+        puzzle_year (int): The year of the puzzle.
+        puzzle_day (int): The day of the puzzle.
+        puzzle_part (int): The part of the puzzle (1 or 2).
         program (str): The program code to run.
         timeout (int): The timeout in seconds.
 
@@ -105,11 +108,24 @@ def run_program(program: str, timeout: int) -> Tuple[str, Union[str, int]]:
         Tuple[str, Union[str, int]]: A tuple indicating the result of running the program:
             - ('error', <error message>)
             - ('timeout', <int timeout value>)
-            - ('success', <output of program>)
+            - ('answer', <answer>)
     """
     assert(program)
     assert(timeout > 0)
     input = aoc.input(puzzle_year, puzzle_day)
+    result, answer = perform.run(program, puzzle_part, input, timeout)
+    if result == 'error':
+        print(f'computation failed: {answer}')
+        return (result, answer)
+    elif result == 'timeout':
+        print('computation timed out')
+        return (result, timeout)
+    elif result == 'success':
+        print(f'computation finished, answer: \'{answer}\'')
+        return('answer', answer)
+    else:
+        raise Exception(f'Unknown result {result}')
+
     # Simulate running the program and potential timeouts
     asse
     
