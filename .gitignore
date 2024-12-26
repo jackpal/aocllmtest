@@ -1,0 +1,4 @@
+.DS_Store
+aoc_results.db
+__pycache__
+report.csv

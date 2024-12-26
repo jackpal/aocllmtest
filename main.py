@@ -31,6 +31,9 @@ def main():
 
     args = parser.parse_args()
 
+    # Create the database and tables if they don't exist
+    db.create_tables()
+
     if args.csv:
         generate_csv_report(args.csv)
     
@@ -47,4 +50,3 @@ def main():
         
 if __name__ == "__main__":
     main()
-    

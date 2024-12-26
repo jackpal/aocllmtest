@@ -128,5 +128,9 @@ Running the experiments with the web server should be the default configuration.
 
 I want to be able to run under the vs code python debugger or without the debugger.
 
+---
+Be sure that the database is created before trying to access it. If I use the --csv option the very first time I run the program, I get an error saying that there is no 'experiments' table.
+
+---
 
 ```
