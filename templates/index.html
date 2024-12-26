@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Advent of Code Experiment Tracker</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script> 
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f0f0f0;
+        }
+        .experiment-table-container {
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Advent of Code Experiment Tracker</h1>
+
+    <h2>Status</h2>
+    <p>Completed: <span id="completed-count"></span></p>
+    <p>Remaining: <span id="remaining-count"></span></p>
+
+    <h2>Model Family Rankings</h2>
+    <div id="model-family-rankings-plot" style="height: 400px;"></div>
+
+    <h2>Model Rankings (by Family)</h2>
+    <select id="model-family-select">
+        <!-- Model families will be populated here -->
+    </select>
+    <div id="model-rankings-plot" style="height: 400px;"></div>
+
+    <h2>Year Rankings</h2>
+    <div id="year-rankings-plot" style="height: 400px;"></div>
+
+    <h2>All Experiments</h2>
+    <div class="experiment-table-container">
+        <table id="experiments-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Model Family</th>
+                    <th>Model Name</th>
+                    <th>Year</th>
+                    <th>Day</th>
+                    <th>Part</th>
+                    <th>Result</th>
+                    <th>Correct</th>
+                    <th>Timeout</th>
+                    <th>Start Time</th>
+                    <th>End Time</th>
+                    <th>Error Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Experiments will be populated here -->
+            </tbody>
+        </table>
+    </div>
+    
+
+    <script>
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('completed-count').textContent = data.completed;
+                    document.getElementById('remaining-count').textContent = data.remaining;
+                });
+        }
+
+        function plotModelFamilyRankings() {
+            fetch('/rankings/model_families')
+                .then(response => response.json())
+                .then(data => {
+                    const x = data.map(item => item[0]);
+                    const y = data.map(item => item[1]);
+
+                    const plotData = [{
+                        x: x,
+                        y: y,
+                        type: 'bar'
+                    }];
+
+                    const layout = {
+                        title: 'Model Family Rankings',
+                        yaxis: { title: 'Success Rate' }
+                    };
+
+                    Plotly.newPlot('model-family-rankings-plot', plotData, layout);
+                });
+        }
+
+        function populateModelFamilySelect() {
+            fetch('/rankings/model_families')
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('model-family-select');
+                    data.forEach(family => {
+                        const option = document.createElement('option');
+                        option.value = family[0];
+                        option.text = family[0];
+                        select.add(option);
+                    });
+                    select.addEventListener('change', plotModelRankings);
+                    plotModelRankings();
+                });
+        }
+
+        function plotModelRankings() {
+            const modelFamily = document.getElementById('model-family-select').value;
+            fetch(`/rankings/models/${modelFamily}`)
+                .then(response => response.json())
+                .then(data => {
+                    const x = data.map(item => item[0]);
+                    const y = data.map(item => item[1]);
+
+                    const plotData = [{
+                        x: x,
+                        y: y,
+                        type: 'bar'
+                    }];
+
+                    const layout = {
+                        title: `Model Rankings - ${modelFamily}`,
+                        yaxis: { title: 'Success Rate' }
+                    };
+
+                    Plotly.newPlot('model-rankings-plot', plotData, layout);
+                });
+        }
+
+        function plotYearRankings() {
+            fetch('/rankings/years')
+                .then(response => response.json())
+                .then(data => {
+                    const x = data.map(item => item[0]);
+                    const y = data.map(item => item[1]);
+
+                    const plotData = [{
+                        x: x,
+                        y: y,
+                        type: 'bar'
+                    }];
+
+                    const layout = {
+                        title: 'Year Rankings',
+                        xaxis: { title: 'Year' },
+                        yaxis: { title: 'Average Success Rate' }
+                    };
+
+                    Plotly.newPlot('year-rankings-plot', plotData, layout);
+                });
+        }
+
+        function updateExperimentsTable() {
+            fetch('/experiments')
+                .then(response => response.json())
+                .then(data => {
+                    const tableBody = document.getElementById('experiments-table').querySelector('tbody');
+                    tableBody.innerHTML = ''; // Clear existing rows
+
+                    data.forEach(experiment => {
+                        const row = tableBody.insertRow();
+                        row.insertCell().textContent = experiment[0]; // ID
+                        row.insertCell().textContent = experiment[1]; // Model Family
+                        row.insertCell().textContent = experiment[2]; // Model Name
+                        row.insertCell().textContent = experiment[3]; // Year
+                        row.insertCell().textContent = experiment[4]; // Day
+                        row.insertCell().textContent = experiment[5]; // Part
+                        row.insertCell().textContent = experiment[8]; // Result
+                        row.insertCell().textContent = experiment[9] ? 'Yes' : 'No'; // Correct
+                        row.insertCell().textContent = experiment[10]; // Timeout
+                        row.insertCell().textContent = experiment[11]; // Start Time
+                        row.insertCell().textContent = experiment[12] ? experiment[12] : ''; // End Time
+                        row.insertCell().textContent = experiment[13] ? experiment[13] : ''; // Error Message
+                    });
+                });
+        }
+
+        // Initial data load and updates
+        updateStatus();
+        plotModelFamilyRankings();
+        populateModelFamilySelect();
+        plotYearRankings();
+        updateExperimentsTable();
+        setInterval(updateStatus, 5000); // Update status every 5 seconds
+        setInterval(updateExperimentsTable, 5000)
+    </script>
+</body>
+</html>

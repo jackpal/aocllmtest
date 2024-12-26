@@ -1,0 +1,40 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Experiments with Webserver (Default)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--run-experiments",
+                "--webserver"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "Generate CSV Report",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--csv",
+                "report.csv"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "Run Experiments (No Webserver)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--run-experiments"
+            ],
+            "justMyCode": true
+        }
+    ]
+}

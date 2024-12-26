@@ -1,0 +1,8 @@
+advent-of-code-data
+advent-of-code-data[nb]
+beautifulsoup4
+flask
+google-generativeai
+jupyter
+keyring
+networkx
