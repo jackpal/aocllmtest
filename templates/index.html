@@ -32,6 +32,7 @@
     <h2>Status</h2>
     <p>Completed: <span id="completed-count"></span></p>
     <p>Remaining: <span id="remaining-count"></span></p>
+    <p>Current Status: <span id="current-status"></span></p>
 
     <h2>Model Family Rankings</h2>
     <div id="model-family-rankings-plot" style="height: 400px;"></div>
@@ -78,6 +79,7 @@
                 .then(data => {
                     document.getElementById('completed-count').textContent = data.completed;
                     document.getElementById('remaining-count').textContent = data.remaining;
+                    document.getElementById('current-status').textContent = data.current_status; // Update current status
                 });
         }
 

@@ -4,6 +4,9 @@ import db
 
 app = Flask(__name__)
 
+# Function to get the current status (will be set from main.py)
+current_status = lambda: "Status not available"
+
 @app.route("/")
 def index():
     """Renders the main page of the web application."""
@@ -15,7 +18,8 @@ def status():
     completed_count, remaining_count = db.count_experiments()
     return jsonify({
         "completed": completed_count,
-        "remaining": remaining_count
+        "remaining": remaining_count,
+        "current_status": current_status()  # Call the function to get the current status
     })
 
 @app.route("/rankings/model_families")

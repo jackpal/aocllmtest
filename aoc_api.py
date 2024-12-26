@@ -106,6 +106,8 @@ def run_program(puzzle_year: int, puzzle_day: int, puzzle_part: int, program: st
             - ('answer', <answer>)
     """
     assert(program)
+    if timeout == None:
+        timeout = 10
     assert(timeout > 0)
     input = aoc.input(puzzle_year, puzzle_day)
     result, answer = perform.run(program, puzzle_part, input, timeout)
