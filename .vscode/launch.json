@@ -35,6 +35,15 @@
                 "--run-experiments"
             ],
             "justMyCode": true
+        },
+        {
+            "name": "Test perform",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_perform.py",
+            "console": "integratedTerminal",
+            "args": [],
+            "justMyCode": true
         }
     ]
 }

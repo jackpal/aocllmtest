@@ -2,9 +2,8 @@ import sys
 import traceback
 import subprocess
 import time
-import signal
 import threading
-import os  # Import the 'os' module
+import os
 
 def run(program: str, part: int, input: str, timeout: int) -> tuple[str, str]:
     """
@@ -50,39 +49,21 @@ if __name__ == '__main__':
         f.write(full_program)
 
     # Run the script as a separate process
-    if os.name == 'posix':
-        # Use signal-based timeout on Unix-like systems
-        process = subprocess.Popen([sys.executable, script_file],
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE,
-                                   preexec_fn=os.setsid)
+    process = subprocess.Popen([sys.executable, script_file],
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
 
-        def timeout_handler(signum, frame):
-            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+    def terminate_process(process):
+        if process.poll() is None:
+            process.terminate()
 
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(timeout)
-    else:
-        # Use a timeout thread on Windows
-        process = subprocess.Popen([sys.executable, script_file],
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE)
-
-        def terminate_process(process):
-            if process.poll() is None:
-                process.terminate()
-
-        timeout_thread = threading.Timer(timeout, terminate_process, args=[process])
-        timeout_thread.start()
+    timeout_thread = threading.Timer(timeout, terminate_process, args=[process])
+    timeout_thread.start()
 
     try:
         # Wait for the process to complete and get output
         stdout, stderr = process.communicate()
-
-        if os.name == 'posix':
-            signal.alarm(0)  # Cancel the alarm if process finished before timeout
-        else:
-            timeout_thread.cancel()
+        timeout_thread.cancel()  # Cancel the timer if process finished before timeout
 
         if os.path.exists(result_file):
             with open(result_file, "r") as f:
