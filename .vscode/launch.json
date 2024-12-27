@@ -5,27 +5,27 @@
             "name": "Run Experiment Runner",
             "type": "python",
             "request": "launch",
-            "program": "experiment_runner.py",
+            "program": "${workspaceFolder}/experiment_runner.py",
             "console": "integratedTerminal",
             "justMyCode": true
         },
         {
-            "name": "Run Web Server",
+            "name": "Run Web Server (Port 5001)",
             "type": "python",
             "request": "launch",
-            "program": "web_server.py",
+            "program": "${workspaceFolder}/web_server.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
                 "--port",
-                "5000"
+                "5001"
             ]
         },
         {
-            "name": "Run DB Manager",
+            "name": "Run DB Manager (Status)",
             "type": "python",
             "request": "launch",
-            "program": "db_manager.py",
+            "program": "${workspaceFolder}/db_manager.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -33,14 +33,14 @@
             ]
         },
         {
-            "name": "Run Report Generator",
+            "name": "Run Report Generator (All Markdown)",
             "type": "python",
             "request": "launch",
-            "program": "report_generator.py",
+            "program": "${workspaceFolder}/report_generator.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "--markdown"
+                "--all"
             ]
         }
     ],
@@ -49,9 +49,15 @@
             "name": "Run Experiment and Web Server",
             "configurations": [
                 "Run Experiment Runner",
-                "Run Web Server"
+                "Run Web Server (Port 5001)"
             ],
             "stopAll": true
         }
-    ]
+    ],
+    "presentation": {
+        "group": "aoc_experiments",
+        "hidden": false,
+        "order": 1
+    },
+    "defaultConfiguration": "Run Experiment and Web Server"
 }

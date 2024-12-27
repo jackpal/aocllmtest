@@ -1,132 +1,170 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Advent of Code Experiment Results</title>
     <style>
         table {
-          border-collapse: collapse;
-          width: 50%;
+            border-collapse: collapse;
+            width: 80%;
+            margin: 20px auto;
         }
-        
         th, td {
-          text-align: left;
-          padding: 8px;
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
         }
-        
-        tr:nth-child(even) {background-color: #f2f2f2;}
-
-        .container {
-            display: flex;
-            gap: 20px;
+        th {
+            background-color: #f2f2f2;
+        }
+        .current-status {
+            margin: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
         }
     </style>
 </head>
 <body>
-    <h1>Advent of Code Experiment Results</h1>
-
-    <h2>Current Status</h2>
-    {% if current_status %}
-        <p>
-            <b>Last Experiment:</b><br>
-            Model Family: {{ current_status.model_family }}<br>
-            Model Name: {{ current_status.model_name }}<br>
-            Puzzle: {{ current_status.year }}/{{ current_status.day }}/{{ current_status.part }}<br>
-            Status: {{ current_status.status }}<br>
-            Timestamp: {{ current_status.timestamp }}<br>
-            {% if current_status.timeout %}
-                Quota Timeout: {{ current_status.timeout }}
+    <div class="current-status">
+        <h2>Current Experiment Status</h2>
+        {% if current_experiment %}
+            <p><strong>Experiment ID:</strong> {{ current_experiment.experiment_id }}</p>
+            <p><strong>Model Family:</strong> {{ current_experiment.model_family }}</p>
+            <p><strong>Model Name:</strong> {{ current_experiment.model_name }}</p>
+            <p><strong>Puzzle:</strong> {{ current_experiment.puzzle_year }}/{{ current_experiment.puzzle_day }}/{{ current_experiment.puzzle_part }}</p>
+            <p><strong>Status:</strong> {{ current_experiment.run_status }}</p>
+            {% if current_experiment.run_error_message %}
+                <p><strong>Error Message:</strong> {{ current_experiment.run_error_message }}</p>
             {% endif %}
-        </p>
-    {% else %}
-        <p>No experiments run yet.</p>
-    {% endif %}
+            {% if current_experiment.run_timeout_seconds %}
+                <p><strong>Timeout (seconds):</strong> {{ current_experiment.run_timeout_seconds }}</p>
+            {% endif %}
+            {% if current_experiment.answer %}
+                <p><strong>Answer:</strong> {{ current_experiment.answer }}</p>
+            {% endif %}
+            <p><strong>Answer is Correct:</strong> {{ current_experiment.answer_is_correct }}</p>
+            <p><strong>Started at:</strong> {{ current_experiment.experiment_started_at }}</p>
+            {% if current_experiment.experiment_finished_at %}
+                <p><strong>Finished at:</strong> {{ current_experiment.experiment_finished_at }}</p>
+            {% endif %}
+            {% if current_experiment.timeout_until %}
+                <p><strong>Quota Timeout Until:</strong> {{ current_experiment.timeout_until }}</p>
+            {% endif %}
+        {% else %}
+            <p>No experiment is currently running.</p>
+        {% endif %}
 
-    <h2>Experiment Summary</h2>
-    <p>
-        Total Experiments: {{ total_experiments }}<br>
-        Solved Experiments: {{ solved_experiments }}<br>
-        Timed-out Experiments: {{ timedout_experiments }}
-    </p>
+        {% if quota_status %}
+            <h3>Quota Timeouts:</h3>
+            <ul>
+                {% for model_family, timeout_until in quota_status %}
+                    <li>{{ model_family }}: until {{ timeout_until }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No active quota timeouts.</p>
+        {% endif %}
+    </div>
+
+    <div>
+        <h2>Experiment Counts</h2>
+        <p><strong>Total Experiments:</strong> {{ total_experiments }}</p>
+        <p><strong>Solved Experiments:</strong> {{ solved_experiments }}</p>
+    </div>
 
     <h2>Model Family Rankings</h2>
     <table>
         <thead>
             <tr>
+                <th>Rank</th>
                 <th>Model Family</th>
-                <th>Average Correctness</th>
+                <th>Solved</th>
+                <th>Attempted</th>
+                <th>Success Rate</th>
             </tr>
         </thead>
         <tbody>
-            {% for row in model_family_rankings %}
-            <tr>
-                <td>{{ row.model_family }}</td>
-                <td>{{ row.avg_correct|round(2) }}</td>
-            </tr>
+            {% for row in model_family_ranks %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ row.model_family }}</td>
+                    <td>{{ row.solved_count }}</td>
+                    <td>{{ row.total_attempted }}</td>
+                    <td>{{ row.success_rate|round(2) }}</td>
+                </tr>
             {% endfor %}
         </tbody>
     </table>
-    
-    <h2>Model Rankings (by Family)</h2>
-    <div class="container">
-        {% for family, models in model_rankings.items() %}
-        <div>
-        <h3>{{ family }}</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Model Name</th>
-                    <th>Average Correctness</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for model in models %}
-                <tr>
-                    <td>{{ model.model_name }}</td>
-                    <td>{{ model.avg_correct|round(2) }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        </div>
-        {% endfor %}
-    </div>
 
-    <h2>Puzzle Year Rankings (Easiest to Hardest)</h2>
+    <h2>Model Rankings</h2>
     <table>
         <thead>
             <tr>
-                <th>Year</th>
-                <th>Average Correctness</th>
+                <th>Model Family</th>
+                <th>Model</th>
+                <th>Solved</th>
+                <th>Attempted</th>
+                <th>Success Rate</th>
             </tr>
         </thead>
         <tbody>
-            {% for row in year_rankings %}
-            <tr>
-                <td>{{ row.year }}</td>
-                <td>{{ row.avg_correct|round(2) }}</td>
-            </tr>
+            {% for row in model_ranks %}
+                <tr>
+                    <td>{{ row.model_family }}</td>
+                    <td>{{ row.model_name }}</td>
+                    <td>{{ row.solved_count }}</td>
+                    <td>{{ row.total_attempted }}</td>
+                    <td>{{ row.success_rate|round(2) }}</td>
+                </tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <h2>Delete Experiments</h2>
-    <form action="/delete" method="post">
-        <label for="experiment_id">Experiment ID:</label>
-        <input type="number" name="experiment_id" id="experiment_id"><br><br>
-
-        <label for="model_family">Model Family:</label>
-        <input type="text" name="model_family" id="model_family"><br><br>
-
-        <label for="model_name">Model Name:</label>
-        <input type="text" name="model_name" id="model_name"><br><br>
-        
-        <label for="year">Year:</label>
-        <input type="number" name="year" id="year"><br><br>
-
-        <button type="submit">Delete</button>
-    </form>
-    
-    <a href="/experiments">View All Experiments</a>
-
+    <h2>Year Rankings (by Difficulty)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Year</th>
+                <th>Solved</th>
+                <th>Attempted</th>
+                <th>Success Rate</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in year_ranks %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ row.puzzle_year }}</td>
+                    <td>{{ row.solved_count }}</td>
+                    <td>{{ row.total_attempted }}</td>
+                    <td>{{ row.success_rate|round(2) }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div>
+        <h2>Delete Experiments</h2>
+        <form action="/delete" method="post">
+            <p>
+                <label for="experiment_id">Experiment ID:</label>
+                <input type="number" name="experiment_id" id="experiment_id">
+            </p>
+            <p>
+                <label for="model_family">Model Family:</label>
+                <input type="text" name="model_family" id="model_family">
+            </p>
+            <p>
+                <label for="model_name">Model Name:</label>
+                <input type="text" name="model_name" id="model_name">
+            </p>
+            <p>
+                <label for="year">Year:</label>
+                <input type="number" name="year" id="year">
+            </p>
+            <button type="submit">Delete</button>
+        </form>
+    </div>
 </body>
 </html>

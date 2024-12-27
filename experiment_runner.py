@@ -1,247 +1,239 @@
 import sqlite3
 import time
-import aoc_api
 import datetime
+from aoc_api import *
+from db_util import create_or_open_puzzle_db
 
-DATABASE = 'puzzles.db'
-INITIAL_TIMEOUT = 10
-TIMEOUT_VALUES = [10, 100, 1000]
-
-def get_next_puzzle_to_solve(conn):
-    """Gets the next puzzle that needs to be solved, in the correct order."""
+def run_experiment():
+    """Runs the experiment, iterating through puzzles and models."""
+    conn = create_or_open_puzzle_db()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT year, day, part
-        FROM puzzles
-        WHERE solved = FALSE
-        ORDER BY year DESC, day ASC, part ASC
-        LIMIT 1
-    """)
-    result = cursor.fetchone()
-    return result
-
-def get_models_to_test(conn):
-    """Gets all model families and models."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT name FROM model_families")
-    model_families = [row[0] for row in cursor.fetchall()]
-    models_data = {}
-    for family in model_families:
-        cursor.execute("SELECT name FROM models WHERE family = ?", (family,))
-        models_data[family] = [row[0] for row in cursor.fetchall()]
-    return models_data
-
-def is_quota_active(conn, model_family):
-    """Checks if there's an active quota timeout for the model family."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT timeout FROM quota_timeouts WHERE model_family = ?", (model_family,))
-    result = cursor.fetchone()
-    if result:
-        timeout = datetime.datetime.strptime(result[0], '%Y-%m-%d %H:%M:%S')
-        if datetime.datetime.now() < timeout:
-            return True
-    return False
-
-def add_quota_timeout(conn, model_family):
-    """Adds or updates a quota timeout for the model family."""
-    cursor = conn.cursor()
-    timeout = datetime.datetime.now() + datetime.timedelta(hours=1)
-    cursor.execute("""
-        INSERT OR REPLACE INTO quota_timeouts (model_family, timeout)
-        VALUES (?, ?)
-    """, (model_family, timeout.strftime('%Y-%m-%d %H:%M:%S')))
-    conn.commit()
-
-def update_experiment(conn, experiment_id, status, result, answer, correct, timed_out, timeout):
-    """Updates an experiment with the results."""
-    cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE experiments
-        SET status = ?, result = ?, answer = ?, correct = ?, timed_out = ?, timeout = ?, timestamp = ?
-        WHERE id = ?
-    """, (status, result, answer, correct, timed_out, timeout, datetime.datetime.now(), experiment_id))
-    conn.commit()
-    
-def mark_puzzle_solved(conn, year, day, part):
-    """Marks a puzzle as solved."""
-    cursor = conn.cursor()
-    cursor.execute("UPDATE puzzles SET solved = TRUE WHERE year = ? AND day = ? AND part = ?", (year, day, part))
-    conn.commit()
-
-def run_experiment(conn, model_family, model_name, year, day, part):
-    """Runs an experiment for a given model, puzzle, and timeout."""
-    cursor = conn.cursor()
-
-    # Check if experiment already exists
-    cursor.execute("""
-        SELECT id, status, timed_out, timeout
-        FROM experiments
-        WHERE model_family = ? AND model_name = ? AND year = ? AND day = ? AND part = ?
-    """, (model_family, model_name, year, day, part))
-    existing_experiment = cursor.fetchone()
-
-    if existing_experiment:
-        experiment_id, status, timed_out, timeout = existing_experiment
-        if status == 'answer':
-            print(f"Skipping existing experiment for {model_family}/{model_name} on {year}/{day}/{part} (already has an answer)")
-            return  # Already has an answer, don't re-run
-        
-        if timed_out:
-            if timeout == TIMEOUT_VALUES[-1]:
-                print(f"Skipping existing experiment for {model_family}/{model_name} on {year}/{day}/{part} (already timed out at max timeout)")
-                return
-            else:
-                current_timeout_index = TIMEOUT_VALUES.index(timeout)
-                timeout = TIMEOUT_VALUES[current_timeout_index + 1]
-        else:
-            timeout = INITIAL_TIMEOUT
-
-    else:
-        experiment_id = None
-        timeout = INITIAL_TIMEOUT
-        timed_out = False
-    
-    # Get puzzle instructions
-    instructions_result = aoc_api.puzzle_instructions(year, day, part)
-    if instructions_result[0] == 'error':
-        print(f"Error getting instructions for {year}/{day}/{part}: {instructions_result[1]}")
-        return
-    elif instructions_result[0] == 'sequence':
-        print(f"Need to solve {instructions_result[1]} before {year}/{day}/{part}")
-        return
-    else:
-        puzzle_instructions = instructions_result[1]
-
-    # Create prompt
-    prompt_result = aoc_api.create_prompt(model_family, model_name, year, day, part, timed_out, puzzle_instructions)
-    if prompt_result[0] == 'error':
-        print(f"Error creating prompt: {prompt_result[1]}")
-        return
-    else:
-        full_prompt = prompt_result[1]
-
-    # Generate program
-    program_result = aoc_api.generate_program(model_family, model_name, full_prompt, year, day, part)
-    if program_result[0] == 'error':
-        print(f"Error generating program: {program_result[1]}")
-        if not existing_experiment:
-            cursor.execute("""
-                INSERT INTO experiments (model_family, model_name, year, day, part, prompt, status, result, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, 'error', ?, ?)
-            """, (model_family, model_name, year, day, part, full_prompt, program_result[1], datetime.datetime.now()))
-            conn.commit()
-        else:
-            update_experiment(conn, experiment_id, 'error', program_result[1], None, None, False, None)
-        return
-    elif program_result[0] == 'quota':
-        print(f"Quota exhausted for {model_family}: {program_result[1]}")
-        add_quota_timeout(conn, model_family)
-        if not existing_experiment:
-            cursor.execute("""
-                INSERT INTO experiments (model_family, model_name, year, day, part, prompt, status, result, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, 'quota', ?, ?)
-            """, (model_family, model_name, year, day, part, full_prompt, program_result[1], datetime.datetime.now()))
-            conn.commit()
-        else:
-            update_experiment(conn, experiment_id, 'quota', program_result[1], None, None, False, None)
-        return
-    else:
-        generated_program = program_result[1]
-
-    # Run program
-    run_result = aoc_api.run_program(year, day, part, generated_program, timeout)
-    if run_result[0] == 'error':
-        print(f"Error running program: {run_result[1]}")
-        if not existing_experiment:
-            cursor.execute("""
-                INSERT INTO experiments (model_family, model_name, year, day, part, prompt, program, status, result, timeout, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'error', ?, ?, ?)
-            """, (model_family, model_name, year, day, part, full_prompt, generated_program, run_result[1], timeout, datetime.datetime.now()))
-            conn.commit()
-        else:
-            update_experiment(conn, experiment_id, 'error', run_result[1], None, None, False, timeout)
-        return
-    elif run_result[0] == 'timeout':
-        print(f"Program timed out after {run_result[1]} seconds")
-        timed_out = True
-        if not existing_experiment:
-            cursor.execute("""
-                INSERT INTO experiments (model_family, model_name, year, day, part, prompt, program, status, result, timed_out, timeout, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'timeout', ?, ?, ?, ?)
-            """, (model_family, model_name, year, day, part, full_prompt, generated_program, run_result[1], timed_out, timeout, datetime.datetime.now()))
-            conn.commit()
-        else:
-            update_experiment(conn, experiment_id, 'timeout', str(run_result[1]), None, None, timed_out, timeout)
-        return
-    else:
-        answer = run_result[1]
-        is_correct = aoc_api.check_answer(year, day, part, answer)
-        print(f"Answer: {answer}, Correct: {is_correct}")
-
-        if not existing_experiment:
-            cursor.execute("""
-                INSERT INTO experiments (model_family, model_name, year, day, part, prompt, program, status, answer, correct, timeout, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'answer', ?, ?, ?, ?)
-            """, (model_family, model_name, year, day, part, full_prompt, generated_program, answer, is_correct, timeout, datetime.datetime.now()))
-            conn.commit()
-        else:
-            update_experiment(conn, experiment_id, 'answer', None, answer, is_correct, False, timeout)
-            
-        if is_correct:
-            mark_puzzle_solved(conn, year, day, part)
-
-def initialize_database(conn):
-    """Initializes the database with model families, models, and puzzles."""
-    cursor = conn.cursor()
-
-    # Insert model families
-    for family in aoc_api.model_families():
-        cursor.execute("INSERT OR IGNORE INTO model_families (name) VALUES (?)", (family,))
-
-    # Insert models
-    for family in aoc_api.model_families():
-        for model in aoc_api.models(family):
-            cursor.execute("INSERT OR IGNORE INTO models (family, name) VALUES (?, ?)", (family, model))
-
-    # Insert puzzles (example years 2015-2024)
-    for year in range(2015, 2025):
-        for day in range(1, 26):
-            for part in range(1, 3):
-                cursor.execute("INSERT OR IGNORE INTO puzzles (year, day, part) VALUES (?, ?, ?)", (year, day, part))
-
-    conn.commit()
-
-def main():
-    """Main function for the experiment runner."""
-    conn = sqlite3.connect(DATABASE)
-    initialize_database(conn)
 
     while True:
-        next_puzzle = get_next_puzzle_to_solve(conn)
-        if not next_puzzle:
-            print("All puzzles solved!")
-            break
+        model_family_to_run = None
 
-        year, day, part = next_puzzle
-        models_data = get_models_to_test(conn)
-        
-        experiment_run = False
-        for model_family, models in models_data.items():
-            if is_quota_active(conn, model_family):
-                continue  # Skip model family if quota is active
+        # Check for quota timeouts
+        cursor.execute("SELECT model_family FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
+        timed_out_families = [row[0] for row in cursor.fetchall()]
 
-            for model_name in models:
-                print(f"Running experiment for {model_family}/{model_name} on {year}/{day}/{part}")
-                run_experiment(conn, model_family, model_name, year, day, part)
-                experiment_run = True
+        available_model_families = [mf for mf in model_families() if mf not in timed_out_families]
 
-        if not experiment_run:
-            print("All model family quotas are active. Waiting...")
-            time.sleep(60)  # Wait for 1 minute before checking again
+        if not available_model_families:
+            # If all model families are timed out, find the one with the shortest remaining timeout
+            cursor.execute("SELECT model_family, MIN(timeout_until) FROM QuotaTimeouts")
+            model_family, next_available_time = cursor.fetchone()
+            sleep_duration = (next_available_time - datetime.datetime.now()).total_seconds()
+            print(f"All model families are timed out. Waiting for {model_family} to be available again in {sleep_duration:.0f} seconds.")
+            time.sleep(sleep_duration)
+            continue
+
+        # Select the next puzzle to solve
+        # Find the latest solved puzzle
+        cursor.execute("""
+            SELECT puzzle_year, puzzle_day, puzzle_part
+            FROM Experiments
+            WHERE answer_is_correct = 1
+            ORDER BY puzzle_year DESC, puzzle_day DESC, puzzle_part DESC
+            LIMIT 1
+        """)
+        latest_solved = cursor.fetchone()
+
+        if latest_solved:
+            latest_year, latest_day, latest_part = latest_solved
         else:
-            time.sleep(5) # Wait 5 seconds before running the next experiment
+            latest_year, latest_day, latest_part = 2024, 0, 0  # Start from the end 2024, day 0, part 0
 
-    conn.close()
+        if latest_part == 1 and latest_day < 25:
+            next_puzzle = (latest_year, latest_day, 2)
+        elif latest_day < 24:
+            next_puzzle = (latest_year, latest_day + 1, 1)
+        elif latest_year > 2015:
+            next_puzzle = (latest_year - 1, 1, 1)
+        else:
+            print("All puzzles have been attempted.")
+            time.sleep(60)
+            continue
 
+        puzzle_year, puzzle_day, puzzle_part = next_puzzle
+        print(f"Attempting puzzle {puzzle_year}/{puzzle_day}/{puzzle_part}")
+        
+        # Prioritize models that haven't been tried yet for this puzzle
+        cursor.execute("""
+            SELECT model_family, model_name
+            FROM (
+                SELECT m.model_family, m.model_name,
+                       CASE WHEN e.experiment_id IS NULL THEN 0 ELSE 1 END as tried
+                FROM (
+                    SELECT DISTINCT model_family, model_name
+                    FROM (
+                        SELECT model_family, model_name FROM (
+                            SELECT model_family, model as model_name
+                            FROM (SELECT DISTINCT model_family FROM ModelFamilyRank), UNNEST(models(model_family)) AS model
+                        )
+                    )
+                ) m
+                LEFT JOIN Experiments e
+                ON m.model_family = e.model_family
+                AND m.model_name = e.model_name
+                AND e.puzzle_year = ?
+                AND e.puzzle_day = ?
+                AND e.puzzle_part = ?
+            )
+            WHERE model_family IN (%s)
+            ORDER BY tried, model_family, model_name
+        """ % ','.join('?'*len(available_model_families)), (puzzle_year, puzzle_day, puzzle_part) + tuple(available_model_families))
+
+        models_to_try = cursor.fetchall()
+
+        if not models_to_try:
+            print(f"All models for puzzle {puzzle_year}/{puzzle_day}/{puzzle_part} have been tried.")
+            continue
+
+        model_family, model_name = models_to_try[0]
+
+        for timeout in [10, 100, 1000]:
+            previous_attempt_timed_out = timeout > 10
+            instructions_result = puzzle_instructions(puzzle_year, puzzle_day, puzzle_part)
+
+            if instructions_result[0] == 'error':
+                print(f"Error getting instructions: {instructions_result[1]}")
+                continue
+            elif instructions_result[0] == 'sequence':
+                print(f"Need to solve {instructions_result[1]} first")
+                continue
+            elif instructions_result[0] == 'success':
+                instructions = instructions_result[1]
+
+            prompt_result = create_prompt(
+                model_family, model_name, puzzle_year, puzzle_day, puzzle_part,
+                previous_attempt_timed_out, instructions
+            )
+
+            if prompt_result[0] == 'error':
+                print(f"Error creating prompt: {prompt_result[1]}")
+                continue
+            elif prompt_result[0] == 'success':
+                full_prompt = prompt_result[1]
+
+            cursor.execute("""
+                INSERT OR IGNORE INTO Experiments (
+                    model_family, model_name, puzzle_year, puzzle_day, puzzle_part,
+                    prompt, experiment_started_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (model_family, model_name, puzzle_year, puzzle_day, puzzle_part, full_prompt, datetime.datetime.now()))
+            conn.commit()
+
+            print(f"Running experiment for {model_family}/{model_name} on {puzzle_year}/{puzzle_day}/{puzzle_part} with timeout {timeout}")
+
+            generate_result = generate_program(
+                model_family, model_name, full_prompt, puzzle_year, puzzle_day, puzzle_part
+            )
+
+            if generate_result[0] == 'error':
+                print(f"Error generating program: {generate_result[1]}")
+                cursor.execute("""
+                    UPDATE Experiments
+                    SET run_status = 'error', run_error_message = ?, experiment_finished_at = ?
+                    WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
+                """, (generate_result[1], datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
+                conn.commit()
+                continue
+            elif generate_result[0] == 'quota':
+                print(f"Quota exhausted for {model_family}: {generate_result[1]}")
+                cursor.execute("INSERT OR REPLACE INTO QuotaTimeouts (model_family, timeout_until) VALUES (?, ?)",
+                               (model_family, datetime.datetime.now() + datetime.timedelta(hours=1)))
+                conn.commit()
+                break # Exit the timeout loop
+            elif generate_result[0] == 'success':
+                program = generate_result[1]
+
+            cursor.execute("""
+                UPDATE Experiments
+                SET program = ?
+                WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
+            """, (program, model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
+            conn.commit()
+
+            run_result = run_program(puzzle_year, puzzle_day, puzzle_part, program, timeout)
+
+            if run_result[0] == 'error':
+                print(f"Error running program: {run_result[1]}")
+                cursor.execute("""
+                    UPDATE Experiments
+                    SET run_status = 'error', run_error_message = ?, experiment_finished_at = ?
+                    WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
+                """, (run_result[1], datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
+                conn.commit()
+                continue
+            elif run_result[0] == 'timeout':
+                print(f"Program timed out after {run_result[1]} seconds")
+                cursor.execute("""
+                    UPDATE Experiments
+                    SET run_status = 'timeout', run_timeout_seconds = ?, experiment_finished_at = ?
+                    WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
+                """, (run_result[1], datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
+                conn.commit()
+                if timeout == 1000:
+                    break  # Give up on this model/puzzle combination after the longest timeout
+                else:
+                    continue # Try again with a longer timeout
+            elif run_result[0] == 'answer':
+                answer = run_result[1]
+                is_correct = check_answer(puzzle_year, puzzle_day, puzzle_part, answer)
+                print(f"Answer: {answer}, Correct: {is_correct}")
+                cursor.execute("""
+                    UPDATE Experiments
+                    SET run_status = 'answer', answer = ?, answer_is_correct = ?, experiment_finished_at = ?
+                    WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
+                """, (answer, is_correct, datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
+                conn.commit()
+                break  # Move on to the next model after getting an answer
+
+        # Update the ranking tables after each puzzle attempt
+        update_ranking_tables(conn)
+        
+def update_ranking_tables(conn):
+    """Updates the ModelRank, ModelFamilyRank, and YearRank tables based on experiment results."""
+    cursor = conn.cursor()
+
+    # Update ModelRank
+    cursor.execute("""
+        INSERT OR REPLACE INTO ModelRank (model_family, model_name, solved_count, total_attempted, success_rate)
+        SELECT
+            model_family,
+            model_name,
+            SUM(CASE WHEN answer_is_correct = 1 THEN 1 ELSE 0 END) as solved_count,
+            COUNT(*) as total_attempted,
+            CAST(SUM(CASE WHEN answer_is_correct = 1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate
+        FROM Experiments
+        GROUP BY model_family, model_name
+    """)
+
+    # Update ModelFamilyRank
+    cursor.execute("""
+        INSERT OR REPLACE INTO ModelFamilyRank (model_family, solved_count, total_attempted, success_rate)
+        SELECT
+            model_family,
+            SUM(CASE WHEN answer_is_correct = 1 THEN 1 ELSE 0 END) as solved_count,
+            COUNT(*) as total_attempted,
+            CAST(SUM(CASE WHEN answer_is_correct = 1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate
+        FROM Experiments
+        GROUP BY model_family
+    """)
+
+    # Update YearRank
+    cursor.execute("""
+        INSERT OR REPLACE INTO YearRank (puzzle_year, solved_count, total_attempted, success_rate)
+        SELECT
+            puzzle_year,
+            SUM(CASE WHEN answer_is_correct = 1 THEN 1 ELSE 0 END) as solved_count,
+            COUNT(*) as total_attempted,
+            CAST(SUM(CASE WHEN answer_is_correct = 1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as success_rate
+        FROM Experiments
+        GROUP BY puzzle_year
+    """)
+
+    conn.commit()
+    
 if __name__ == "__main__":
-    main()
+    run_experiment()
