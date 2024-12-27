@@ -1,6 +1,6 @@
 .DS_Store
-aoc_results.db
 __pycache__
+puzzles.db
 report.csv
 stderr.txt
 stdout.txt

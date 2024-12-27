@@ -36,4 +36,5 @@ Follow instructions at <https://github.com/wimglenn/advent-of-code-data>
 ## Running the LLM tester
 
 ``` shell
-python aocllm.py
+python db_manager.py --init
+```

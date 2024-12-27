@@ -19,7 +19,7 @@ For a given year and day, part 1 of the puzzle has to be solved first, before th
 
 To help you, there is a library in the file aoc_api.py that has the following predefined functions. Generate stub versions of these functions.
 
-modelfamilies() -> List[str]
+model_families() -> List[str]
 
 Returns a list of the available model families
 

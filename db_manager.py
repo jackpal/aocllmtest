@@ -66,7 +66,7 @@ def initialize_database(conn):
     ''')
 
     # Pre-populate model families and models
-    for family in aoc_api.modelfamilies():
+    for family in aoc_api.model_families():
         cursor.execute("INSERT OR IGNORE INTO model_families (name) VALUES (?)", (family,))
         for model in aoc_api.models(family):
             cursor.execute("INSERT OR IGNORE INTO models (family, name) VALUES (?, ?)", (family, model))
