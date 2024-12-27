@@ -53,10 +53,10 @@ def get_next_experiment() -> Tuple:
     parts = range(1, 3)
     
     # Iterate through the combinations based on the strategy
-    for model_family in available_model_families:
-        for model_name in aoc_api.models(model_family):
-            for year in years:
-                for day in days:
+    for year in years:
+        for day in days:
+            for model_family in available_model_families:
+                for model_name in aoc_api.models(model_family):
                     for part in parts:
                         # Check if this experiment already exists in the database
                         # Note: This assumes that the combination of model_family, model_name, year, day, and part uniquely identifies an experiment.
