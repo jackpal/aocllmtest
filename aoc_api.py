@@ -80,8 +80,11 @@ def generate_program(model_family: str, model_name: str, full_prompt: str, puzzl
     """
     assert(model_family == 'Gemini')
     try:
-        text = gemini.generate(model_name, full_prompt)
-        return ('success', text)
+        result, text = gemini.generate(model_name, full_prompt)
+        if result == 'success':
+            return ('success', text)
+        else:
+            return ('error', 'No program found. Text: {text}')
     except Exception as e:
         exception_str = str(e)
         if "429" in exception_str:
