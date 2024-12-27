@@ -1,43 +1,57 @@
+# test_perform.py
 import unittest
-from perform import run  # Assuming your code is in a file named perform.py
+from perform import run
 
-class TestRunFunction(unittest.TestCase):
+class TestPerform(unittest.TestCase):
 
     def test_successful_execution(self):
-        program = "def solve(part, input): return input.upper()"
-        status, result = run(program, 1, "hello", timeout=5)
-        self.assertEqual(status, "success")
-        self.assertEqual(result, "HELLO")
+        program = "import sys\nprint(sys.stdin.read())"
+        input_str = "test input"
+        status, output = run(program, input_str, 2)
+        self.assertEqual(status, 'success')
+        self.assertEqual(output, input_str)
 
-    def test_successful_execution_with_part(self):
-        program = "def solve(part, input): return input[part - 1]"
-        status, result = run(program, 2, "abcde", timeout=5)
-        self.assertEqual(status, "success")
-        self.assertEqual(result, "b")
+    def test_program_with_output(self):
+        program = "print('hello world')"
+        status, output = run(program, "", 2)
+        self.assertEqual(status, 'success')
+        self.assertEqual(output, 'hello world')
 
-    def test_error_missing_solve(self):
-        program = "def wrong_function(part, input): return 0"
-        status, result = run(program, 1, "test", timeout=5)
-        self.assertEqual(status, "error")
-        self.assertIn("NameError", result)
+    def test_program_with_integer_output(self):
+        program = "print(123)"
+        status, output = run(program, "", 2)
+        self.assertEqual(status, 'success')
+        self.assertEqual(output, '123')
 
-    def test_error_runtime_exception(self):
-        program = "def solve(part, input): return 1 / 0"
-        status, result = run(program, 1, "test", timeout=5)
-        self.assertEqual(status, "error")
-        self.assertIn("ZeroDivisionError", result)
+    def test_program_with_error(self):
+        program = "undefined_variable"
+        status, output = run(program, "", 2)
+        self.assertEqual(status, 'error')
+        self.assertIn("NameError", output)
 
-    def test_timeout(self):
-        program = "def solve(part, input): import time; time.sleep(2); return 'done'"
-        status, result = run(program, 1, "test", timeout=1)  # Timeout less than sleep time
-        self.assertEqual(status, "timeout")
-        self.assertIsNone(result)
+    def test_program_with_syntax_error(self):
+        program = "print("
+        status, output = run(program, "", 2)
+        self.assertEqual(status, 'error')
+        self.assertIn("SyntaxError", output)
 
-    def test_infinite_loop_timeout(self):
-        program = "def solve(part, input): \n  while True: pass"
-        status, result = run(program, 1, "test", timeout=1)
-        self.assertEqual(status, "timeout")
-        self.assertIsNone(result)
+    def test_program_timeout(self):
+        program = "import time\nwhile True:\n    time.sleep(0.1)"
+        status, output = run(program, "", 1)
+        self.assertEqual(status, 'timeout')
+        self.assertIsNone(output)
+
+    def test_program_reads_empty_stdin(self):
+        program = "import sys\nprint(len(sys.stdin.read()))"
+        status, output = run(program, "", 2)
+        self.assertEqual(status, 'success')
+        self.assertEqual(output, '0')
+
+    def test_program_with_multiline_output(self):
+        program = "print('line1')\nprint('line2')"
+        status, output = run(program, "", 2)
+        self.assertEqual(status, 'success')
+        self.assertEqual(output, 'line1\nline2')
 
 if __name__ == '__main__':
     unittest.main()

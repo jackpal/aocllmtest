@@ -3,24 +3,19 @@ def system_prompt():
 
 The puzzle has two parts. You will first be prompted to solve the first part, then a later prompt will ask you to solve part two.
 
-write your code in the form of a function with the signature:
-
-    solve(part: int, input: str) -> str
-
-The argument part is an integer, that will be 1 for part 1, or 2 for part 2.
+write your code in the form of a python program that takes input from stdin and prints the puzzle output to stdout:
 
 For example if the puzzle is, "The input is a series of numbers, one per line. Calculate the sum of the numbers", then the code you generate could look like this:
 
-    def solve(part, input):
-        return sum([int(line) for line in input.splitlines()])
+    import sys
+    
+    print(sum([int(line) for line in sys.stdin])
 
 And if the "Part 2" of the puzzle is "Calculate the product of the numbers instead", then the code you generate could look like this:
 
-    def solve(part, input):
-        if part == 1:
-            return sum([int(line) for line in input.splitlines()])
-        elif part == 2:
-            return prod([int(line) for line in input.splitlines()])
+    import sys
+    
+    print(prod([int(line) for line in sys.stdin])
 
 Assume that the input is valid. Do not validate the input. Do not guard against infinite loops.
 
