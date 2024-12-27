@@ -29,7 +29,7 @@ def create_or_open_puzzle_db(db_name: str = "puzzle.db") -> Connection:
     # Initialize ModelFamilies and Models tables
     for family in model_families():
         cursor.execute("INSERT OR IGNORE INTO ModelFamilies (model_family) VALUES (?)", (family,))
-        for model in models(family).split(','):
+        for model in models(family):  # models() now returns a list
             cursor.execute("INSERT OR IGNORE INTO Models (model_name, model_family) VALUES (?, ?)", (model, family))
 
     conn.commit()
