@@ -2,48 +2,56 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run Experiments with Webserver (Default)",
+            "name": "Run Experiment Runner",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "experiment_runner.py",
             "console": "integratedTerminal",
-            "args": [
-                "--run-experiments",
-                "--webserver"
-            ],
             "justMyCode": true
         },
         {
-            "name": "Generate CSV Report",
+            "name": "Run Web Server",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "web_server.py",
             "console": "integratedTerminal",
+            "justMyCode": true,
             "args": [
-                "--csv",
-                "report.csv"
-            ],
-            "justMyCode": true
+                "--port",
+                "5000"
+            ]
         },
         {
-            "name": "Run Experiments (No Webserver)",
+            "name": "Run DB Manager",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "db_manager.py",
             "console": "integratedTerminal",
+            "justMyCode": true,
             "args": [
-                "--run-experiments"
-            ],
-            "justMyCode": true
+                "--status"
+            ]
         },
         {
-            "name": "Test perform",
+            "name": "Run Report Generator",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/test_perform.py",
+            "program": "report_generator.py",
             "console": "integratedTerminal",
-            "args": [],
-            "justMyCode": true
+            "justMyCode": true,
+            "args": [
+                "--markdown"
+            ]
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Run Experiment and Web Server",
+            "configurations": [
+                "Run Experiment Runner",
+                "Run Web Server"
+            ],
+            "stopAll": true
         }
     ]
 }

@@ -1,6 +1,6 @@
 advent-of-code-data
 advent-of-code-data[nb]
-flask
+Flask
 google-generativeai
 jupyter
 keyring

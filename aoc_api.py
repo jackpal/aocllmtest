@@ -28,7 +28,18 @@ def models(model_family: str) -> List[str]:
     else:
         return []
 
-def create_prompt(model_family: str, model_name: str, puzzle_year: int, puzzle_day: int, puzzle_part: int, previous_attempt_timed_out: bool) -> Tuple[str, Union[str, Tuple[int, int, int]]]:
+def puzzle_instructions(puzzle_year: int, puzzle_day: int, puzzle_part: int) -> Tuple[str, str | Tuple[int, int, int]]:
+    """Returns the puzzle instructions."""
+    if puzzle_part > 1:
+        precursor_puzzle_part = puzzle_part-1
+        if not aoc.puzzle_solved(puzzle_year, puzzle_day, precursor_puzzle_part):
+            return ('sequence', (puzzle_year, puzzle_day, precursor_puzzle_part))
+
+    puzzle_prose = aoc.puzzle_prose(puzzle_year, puzzle_day, puzzle_part)
+    
+    return ('success', puzzle_prose)
+
+def create_prompt(model_family: str, model_name: str, puzzle_year: int, puzzle_day: int, puzzle_part: int, previous_attempt_timed_out: bool, puzzle_instructions: str) -> Tuple[str, Union[str, Tuple[int, int, int]]]:
     """Creates a prompt suitable for solving the given puzzle.
 
     Args:
@@ -42,23 +53,15 @@ def create_prompt(model_family: str, model_name: str, puzzle_year: int, puzzle_d
     Returns:
         Tuple[str, Union[str, Tuple[int, int, int]]]: A tuple indicating the result of the prompt creation:
             - ('error', <error message>)
-            - ('sequence', (year, day, part))
             - ('success', <prompt>)
     """
-    
-    if puzzle_part > 1:
-        precursor_puzzle_part = puzzle_part-1
-        if not aoc.puzzle_solved(puzzle_year, puzzle_day, precursor_puzzle_part):
-            return ('sequence', (puzzle_year, puzzle_day, precursor_puzzle_part))
-    
+        
     system_prompt = prompt.system_prompt()
     
-    puzzle_prompt = aoc.puzzle_prose(puzzle_year, puzzle_day, puzzle_part)
-
-    full_prompt = system_prompt + '\n\n' + puzzle_prompt
+    full_prompt = system_prompt + '\n\n' + puzzle_instructions
 
     if previous_attempt_timed_out:
-        full_prompt += " Note: Previous attempts timed out. Use algorithms with good O(n) performance, and techniques such as @cache to make the program run faster. The input may be very large."
+        full_prompt += " Note: Previous attempts to solve this puzzle timed out. Use algorithms with good O(n) performance, and techniques such as @cache to make the program run faster. The input may be very large."
     return ("success", full_prompt)
 
 def generate_program(model_family: str, model_name: str, full_prompt: str, puzzle_year: int, puzzle_day: int, puzzle_part: int) -> Tuple[str, str]:

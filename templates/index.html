@@ -1,208 +1,132 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Advent of Code Experiment Tracker</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script> 
+    <title>Advent of Code Experiment Results</title>
     <style>
-        body {
-            font-family: sans-serif;
-            margin: 20px;
-        }
         table {
-            border-collapse: collapse;
-            width: 100%;
-            margin-bottom: 20px;
+          border-collapse: collapse;
+          width: 50%;
         }
+        
         th, td {
-            border: 1px solid black;
-            padding: 8px;
-            text-align: left;
+          text-align: left;
+          padding: 8px;
         }
-        th {
-            background-color: #f0f0f0;
-        }
-        .experiment-table-container {
-            overflow-x: auto;
+        
+        tr:nth-child(even) {background-color: #f2f2f2;}
+
+        .container {
+            display: flex;
+            gap: 20px;
         }
     </style>
 </head>
 <body>
-    <h1>Advent of Code Experiment Tracker</h1>
+    <h1>Advent of Code Experiment Results</h1>
 
-    <h2>Status</h2>
-    <p>Completed: <span id="completed-count"></span></p>
-    <p>Remaining: <span id="remaining-count"></span></p>
-    <p>Current Status: <span id="current-status"></span></p>
-    <p>Time Until Quota Reset: <span id="time-until-reset"></span></p>
+    <h2>Current Status</h2>
+    {% if current_status %}
+        <p>
+            <b>Last Experiment:</b><br>
+            Model Family: {{ current_status.model_family }}<br>
+            Model Name: {{ current_status.model_name }}<br>
+            Puzzle: {{ current_status.year }}/{{ current_status.day }}/{{ current_status.part }}<br>
+            Status: {{ current_status.status }}<br>
+            Timestamp: {{ current_status.timestamp }}<br>
+            {% if current_status.timeout %}
+                Quota Timeout: {{ current_status.timeout }}
+            {% endif %}
+        </p>
+    {% else %}
+        <p>No experiments run yet.</p>
+    {% endif %}
+
+    <h2>Experiment Summary</h2>
+    <p>
+        Total Experiments: {{ total_experiments }}<br>
+        Solved Experiments: {{ solved_experiments }}<br>
+        Timed-out Experiments: {{ timedout_experiments }}
+    </p>
 
     <h2>Model Family Rankings</h2>
-    <div id="model-family-rankings-plot" style="height: 400px;"></div>
-
+    <table>
+        <thead>
+            <tr>
+                <th>Model Family</th>
+                <th>Average Correctness</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in model_family_rankings %}
+            <tr>
+                <td>{{ row.model_family }}</td>
+                <td>{{ row.avg_correct|round(2) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
     <h2>Model Rankings (by Family)</h2>
-    <select id="model-family-select">
-        <!-- Model families will be populated here -->
-    </select>
-    <div id="model-rankings-plot" style="height: 400px;"></div>
-
-    <h2>Year Rankings</h2>
-    <div id="year-rankings-plot" style="height: 400px;"></div>
-
-    <h2>All Experiments</h2>
-    <div class="experiment-table-container">
-        <table id="experiments-table">
+    <div class="container">
+        {% for family, models in model_rankings.items() %}
+        <div>
+        <h3>{{ family }}</h3>
+        <table>
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Model Family</th>
                     <th>Model Name</th>
-                    <th>Year</th>
-                    <th>Day</th>
-                    <th>Part</th>
-                    <th>Result</th>
-                    <th>Correct</th>
-                    <th>Timeout</th>
-                    <th>Start Time</th>
-                    <th>End Time</th>
-                    <th>Error Message</th>
-                    <th>Previous Attempt Timed Out</th>
+                    <th>Average Correctness</th>
                 </tr>
             </thead>
             <tbody>
-                <!-- Experiments will be populated here -->
+                {% for model in models %}
+                <tr>
+                    <td>{{ model.model_name }}</td>
+                    <td>{{ model.avg_correct|round(2) }}</td>
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
-    </div>    
+        </div>
+        {% endfor %}
+    </div>
 
-    <script>
-        function updateStatus() {
-            fetch('/status')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('completed-count').textContent = data.completed;
-                    document.getElementById('remaining-count').textContent = data.remaining;
-                    document.getElementById('current-status').textContent = data.current_status; // Update current status
-                    document.getElementById('time-until-reset').textContent = data.time_until_reset;
-                });
-        }
+    <h2>Puzzle Year Rankings (Easiest to Hardest)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Year</th>
+                <th>Average Correctness</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in year_rankings %}
+            <tr>
+                <td>{{ row.year }}</td>
+                <td>{{ row.avg_correct|round(2) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
-        function plotModelFamilyRankings() {
-            fetch('/rankings/model_families')
-                .then(response => response.json())
-                .then(data => {
-                    const x = data.map(item => item[0]);
-                    const y = data.map(item => item[1]);
+    <h2>Delete Experiments</h2>
+    <form action="/delete" method="post">
+        <label for="experiment_id">Experiment ID:</label>
+        <input type="number" name="experiment_id" id="experiment_id"><br><br>
 
-                    const plotData = [{
-                        x: x,
-                        y: y,
-                        type: 'bar'
-                    }];
+        <label for="model_family">Model Family:</label>
+        <input type="text" name="model_family" id="model_family"><br><br>
 
-                    const layout = {
-                        title: 'Model Family Rankings',
-                        yaxis: { title: 'Success Rate' }
-                    };
+        <label for="model_name">Model Name:</label>
+        <input type="text" name="model_name" id="model_name"><br><br>
+        
+        <label for="year">Year:</label>
+        <input type="number" name="year" id="year"><br><br>
 
-                    Plotly.newPlot('model-family-rankings-plot', plotData, layout);
-                });
-        }
+        <button type="submit">Delete</button>
+    </form>
+    
+    <a href="/experiments">View All Experiments</a>
 
-        function populateModelFamilySelect() {
-            fetch('/rankings/model_families')
-                .then(response => response.json())
-                .then(data => {
-                    const select = document.getElementById('model-family-select');
-                    data.forEach(family => {
-                        const option = document.createElement('option');
-                        option.value = family[0];
-                        option.text = family[0];
-                        select.add(option);
-                    });
-                    select.addEventListener('change', plotModelRankings);
-                    plotModelRankings();
-                });
-        }
-
-        function plotModelRankings() {
-            const modelFamily = document.getElementById('model-family-select').value;
-            fetch(`/rankings/models/${modelFamily}`)
-                .then(response => response.json())
-                .then(data => {
-                    const x = data.map(item => item[0]);
-                    const y = data.map(item => item[1]);
-
-                    const plotData = [{
-                        x: x,
-                        y: y,
-                        type: 'bar'
-                    }];
-
-                    const layout = {
-                        title: `Model Rankings - ${modelFamily}`,
-                        yaxis: { title: 'Success Rate' }
-                    };
-
-                    Plotly.newPlot('model-rankings-plot', plotData, layout);
-                });
-        }
-
-        function plotYearRankings() {
-            fetch('/rankings/years')
-                .then(response => response.json())
-                .then(data => {
-                    const x = data.map(item => item[0]);
-                    const y = data.map(item => item[1]);
-
-                    const plotData = [{
-                        x: x,
-                        y: y,
-                        type: 'bar'
-                    }];
-
-                    const layout = {
-                        title: 'Year Rankings',
-                        xaxis: { title: 'Year' },
-                        yaxis: { title: 'Average Success Rate' }
-                    };
-
-                    Plotly.newPlot('year-rankings-plot', plotData, layout);
-                });
-        }
-
-        function updateExperimentsTable() {
-            fetch('/experiments')
-                .then(response => response.json())
-                .then(data => {
-                    const tableBody = document.getElementById('experiments-table').querySelector('tbody');
-                    tableBody.innerHTML = ''; // Clear existing rows
-
-                    data.forEach(experiment => {
-                        const row = tableBody.insertRow();
-                        row.insertCell().textContent = experiment.id;
-                        row.insertCell().textContent = experiment.model_family;
-                        row.insertCell().textContent = experiment.model_name;
-                        row.insertCell().textContent = experiment.year;
-                        row.insertCell().textContent = experiment.day;
-                        row.insertCell().textContent = experiment.part;
-                        row.insertCell().textContent = experiment.result;
-                        row.insertCell().textContent = experiment.correct ? 'Yes' : 'No';
-                        row.insertCell().textContent = experiment.timeout;
-                        row.insertCell().textContent = experiment.start_time;
-                        row.insertCell().textContent = experiment.end_time ? experiment.end_time : '';
-                        row.insertCell().textContent = experiment.error_message ? experiment.error_message : '';
-                        row.insertCell().textContent = experiment.previous_attempt_timed_out ? 'Yes' : 'No';
-                    });
-                });
-        }
-
-        // Initial data load and updates
-        updateStatus();
-        plotModelFamilyRankings();
-        populateModelFamilySelect();
-        plotYearRankings();
-        updateExperimentsTable();
-        setInterval(updateStatus, 5000); // Update status every 5 seconds
-        setInterval(updateExperimentsTable, 5000)
-    </script>
 </body>
 </html>

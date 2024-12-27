@@ -1,19 +1,25 @@
 # Prompts used to generate the aocllm test app
 
-```
+Jack Palevich
+Dec 26, 2024
+
 Initial prompt
 
-You are an expert SQLite and Python 3 programmer.
+You are an expert Python and SQLite programmer.
 
-You are writing a Python app that will run a series of tests to see how well different models and different prompts work on writing code to solve the Advent of Code puzzles. The app will keep track of the test results in a SQL database. The app will provide a Flask web based API for viewing the progress of the tests and the results of the test. The app will also provide command-line arguments for generating csv output giving the results of the tests.
+Summary of task:
+
+You are writing a set of four Python apps that will run a series of experiments to see how well different LLM models and different prompts work on writing code to solve the Advent of Code puzzles. 
+
+The apps will keep track of the experiment results and the current state of the overall process  in a SQLite database. One app will conduct the experiments. A second app will provide a web UI for viewing the status of the experiments. A third app will allow editing the experiment database using command line flags, and a fourth app will allow generating reports using command line flags.
 
 Advent of Code is a collection of puzzles that are designed to be solved with computer assistance. The contest runs yearly, for 25 days each year. Currently there are 10 years, from 2015 to 2024. Each year has 25 days of puzzles, and each day’s puzzle has 2 parts. Day 25, part 2, is special because it is automatically solved when all the other puzzles of that year have been solved.
 
 For a given year and day, part 1 of the puzzle has to be solved first, before the instructions for part 2 become available. Therefore part 1 of a given year and day must be solved before part 2 is solved.
 
-The following functions already exist, in a library named aoc_api, and you should call them as needed to help with the problem:
+To help you, there is a library in the file aoc_api.py that has the following predefined functions. Generate stub versions of these functions.
 
-model_families() -> List[str]
+modelfamilies() -> List[str]
 
 Returns a list of the available model families
 
@@ -21,7 +27,21 @@ models(model_family: str) -> List[str]
 
 Returns a list of models for a given model family.
 
-create_prompt(model_family: str, model_name: str, puzzle_year: int, puzzle_day: int, puzzle_part: int, previous_attempt_timed_out: boolean) -> Tuple[str, str|Tuple[int,int,int]]
+puzzle_instructions(puzzle_year: int, puzzle_day: int, puzzle_part: int) ->  Tuple[str, strstr|Tuple[int,int,int]]
+
+Returns the puzzle instructions, which are required for creating a prompt. The prose for part 2 puzzles is not available until after part 1 of the puzzle has been solved.
+
+Returns the puzzle description as a tuple:
+
+(‘error’, <error message>)
+(‘sequence’, (year, day, part))
+(‘success’, <instructions>)
+
+‘error’ means that an error has occurred.
+‘sequence’ means the function will not succeed until after the given (year, day, part) puzzle has been solved.
+‘success’ means the function succeeded, and the puzzle instructions are the second item in the tuple.
+
+create_prompt(model_family: str, model_name: str, puzzle_year: int, puzzle_day: int, puzzle_part: int, previous_attempt_timed_out: boolean, puzzle_instructions: str) -> Tuple[str, str|Tuple[int,int,int]]
 
 This function creates a prompt suitable for solving the given puzzle.
 
@@ -30,10 +50,7 @@ The previous_attempt_timed_out argument is initially False, but is set to true i
 This function returns the prompt as a tuple:
 
 (‘error’, <error message>)
-(‘sequence’, (year, day, part))
 (‘success’, <prompt>)
-
-A ‘sequence’ message means the puzzle can’t be attempted yet, because another puzzle needs to be solved first.The (year, day, part) of the other puzzle is returned as the second item in the tuple.  In general, for a given puzzle year and puzzle day, part 1 has to be solved first before part 2 can be attempted.
  
 generate_program(model_family: str, model_name: str, full_prompt: str, puzzle_year: int, puzzle_day: int, puzzle_part: int)  -> tuple[str, str]
 
@@ -45,13 +62,15 @@ This function generates a program using the given arguments. It returns a tuple 
 
 A quota is a special kind of error message. It means that the generate_program process failed for this particular model_family, but might succeed if it was tried again after a period of time elapsed.
 
-run_program(program: str, timeout: int) -> tuple[str, str|int]
+run_program(puzzle_year: int, puzzle_day: int, puzzle_part: int, program: str, timeout: int) -> tuple[str, str|int]
 
-This function tests the program in a safe environment. The timeout is the time in seconds that the program is allowed to run before timing out. It returns a tuple where the first item is an enumerated string ‘error’ or ‘success’. The second item depends on the first item:
+This function tests the program in a safe environment. The timeout is the time in seconds that the program is allowed to run before timing out. It returns a tuple where the first item is an enumerated string ‘error’ ‘timeout’, or ‘answer’. The second item depends on the first item:
 
 (‘error’, <error message>)
 (‘timeout’, <int timeout value>) 
-(‘success’, <output of program>)
+(‘answer’, <answer>)
+
+The answer may be correct, or it may be incorrect. You have to call check_answer (below) to check if it is correct.
 
 
 check_answer(puzzle_year: int, puzzle_day: int, puzzle_part: int, answer:  str) -> bool
@@ -60,13 +79,49 @@ This function checks if the given answer is correct for the given puzzle, and re
 
 OK, your job is:
 
-Write a python program to test how well the different models from the different model families can solve Advent of Code puzzles.
+Design a sqlite database schema for storing the overall progress of the process and the experiment results.
 
-It takes a long time to run all the tests, and the program may be killed and restarted during the testing process. Use a SQL database to keep track of the progress.
+Write four Python programs that communicate through a shared sqlite database:
+
+1. An experiment runner that incrementally runs experiments to build up the experiment database that says how well the different models from the different model families can solve Advent of Code puzzles.
+
+It takes a long time to run all the tests, and the program may be killed and restarted during the testing process. Use a SQLite database to keep track of the progress.
+
+
+2. A web server that provides a nice UI for viewing the experiment database. Use the Flask web server library. Allow the web server port to be optionally specified from the command line.
+
+3. A database manager app that can display the current database status and has command line arguments for deleting experiment records that match certain facts such as experiment id, mode_family, year, and so on.
+
+3. A report generator that can display markdown and csv reports, and has command lines for controlling which reports are generated.
 
 Provide a way of querying the database to tell the current status of the testing run, and for summarizing the results of the experiments.
 
-Some interesting queries are:
+
+Hints for the database
+
+Puzzles are uniquely identified by the tuple year,day,part.
+
+Puzzle experiment records are uniquely identified by model_family, model, tuple year, day, part. Only keep a record of one experiment for each tuple of model_family, model, tuple year, day, part. If a experiment fails due to an error or a timeout, or a quota exhaustion, you can try again. Once an experiment has generated an answer, even if the answer is wrong, do not try that experiment again.
+
+Use unique constraints to prevent duplicate experiment entries.
+
+Hints for the experiment runner
+
+Test the puzzles in order of descending year. Within a year, test in order of increasing day. For a given year and day, test part 1 first before testing part 2.
+
+For a given puzzle,  test all the models from all the model_families before moving on to the next puzzle.
+
+Initially use a short timeout value (say 10 seconds). For problems that timeout with the short value, try regenerating the prompt with previous_attempt_timed_out:True. If that still times out, try using longer timeout values (100 seconds, and finally 1000 seconds.)
+
+If a given call to generate_program fails with a ‘quota’ error, remember that fact, and don’t try to generate_program for the same model_family for 1 hour. You can generate for other model families if there are any other model families that are not also waiting for their 1 hour timeout to expire.
+
+If there is nothing to do (due to not have any more puzzles to solve, or to all model family quotas being exhausted), the test engine should sleep until it is likely that there is something to do.
+
+Hints for the report generator
+
+The program will generate command-line and web-based reports. Some  interesting reports are:
+
+What is the test engine currently doing. (Which puzzle is being tested, or is it waiting for a model family quota timeout, and if so, how much time until the timeout is over.)
 
 
 How many experiments have been run so far, and how many more experiments are there?
@@ -77,60 +132,15 @@ Within each model family, rank the models by how well they solve the tests.
 
 How difficult are the different puzzle years? Rank them by how hard they are to solve.
 
-Some strategies for deciding what order to test things in:
+Hints for the web server
 
-Test the most recent year first, because that year is likely to not yet be in the training set for the models, so it is likely to give a more accurate representation.
+The user would like to see the current status of the experiment runner, and also graphs, charts, and tables of interesting statistics. And the user would like to be able to delete experiment results by experiment id, model, and/or year.
 
-Test the lower-numbered days of each year first, because they are likely to be easier problems and so likely to be successful.
+In addition to the python code
 
-Test all the members of a model_family on the same problem, because it’s interesting to see if there are any differences.
+Generate a VS code launch.json file with configurations for running each of the three programs.
 
-Initially use a short timeout value (say 10 seconds). For problems that timeout with the short value, try regenerating the prompt with previous_attempt_timed_out:True. If that still times out, try using longer timeout values (100 seconds, and finally 1000 seconds.)
+Also provide a compound launch configuration that launches the experiment runner and the web server.
 
-If a given call to generate_program fails with a ‘quota’ error, remember that fact, and don’t try to generate_program for the same model_family for 1 hour. You can generate for other model families if there are any other model families that are not also waiting for their 1 hour timeout to expire.
+Launching the compound launch configuration should be the default configuration.
 
-Now generate the following files to implement the program. This is a big program, so generate it in parts:
-
-An aoc_api.py file that contains stub implementations of the aoc_api functions. Use Python typing hints and generate doc strings.
-
-A db.py file that contains all the database functions
-
-A strategy.py file that contains the strategy functions for deciding which tests to run in which order, and runs the tests.
-
-A webserver.py file that contains the web server functions
-
-A main.py file that contains the command line argument parsing and calls all the other functions.
-
-
-Generate the stub aoc_api.py file now:
-
-—
-
-Generate the db.py file now
-
-—
-
-Generate the strategy.py file now
-
-—
-
-Generate the webserver.py file now
-
----
-
-Generate the main.py file now
-
-—
-
-Generate a VS code launch.json file with configurations for generating the report, running the experiments without the web server, and running the experiments with the web server.
-
-Running the experiments with the web server should be the default configuration.
-
-I want to be able to run under the vs code python debugger or without the debugger.
-
----
-Be sure that the database is created before trying to access it. If I use the --csv option the very first time I run the program, I get an error saying that there is no 'experiments' table.
-
----
-
-```
