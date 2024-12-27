@@ -157,32 +157,4 @@ def main():
         parser.print_help()
 
 if __name__ == "__main__":
-    main()gument("--part", type=int, help="Filter by part for deletion.")
-    parser.add_argument("--result", help="Filter by result for deletion.")
-
-    args = parser.parse_args()
-
-    # Create the database and tables if they don't exist
-    db.create_tables()
-
-    if args.csv:
-        generate_csv_report(args.csv)
-    
-    if args.run_experiments:
-        experiment_thread = threading.Thread(target=run_experiments_thread, daemon=True)
-        experiment_thread.start()
-
-    if args.webserver:
-        print("Starting webserver...")
-        # Update webserver to use the global current_status
-        webserver.current_status = lambda: current_status
-        webserver.app.run(debug=True, port=8000)
-
-    if args.delete_experiments:
-        delete_experiments(args.model_family, args.model_name, args.year, args.day, args.part, args.result)
-
-    if not any(vars(args).values()):
-        parser.print_help()
-
-if __name__ == "__main__":
     main()
