@@ -129,6 +129,9 @@ def run_experiment(model_family: str, model_name: str, year: int, day: int, part
 
     # 3. Run program
     run_result = aoc_api.run_program(year, day, part, generated_program, timeout)
+    
+    program_output = None
+    is_correct = None
 
     if run_result[0] == 'error':
         print(f"Error running program: {run_result[1]}")
