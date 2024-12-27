@@ -1,11 +1,12 @@
 import sqlite3
 from sqlite3 import Connection
 import datetime
+from aoc_api import model_families, models
 
 def create_or_open_puzzle_db(db_name: str = "puzzle.db") -> Connection:
     """Creates the puzzle.db database if it doesn't exist, otherwise opens it.
 
-    Also registers the modern datetime adapter.
+    Also registers the modern datetime adapter and initializes ModelFamilies and Models tables.
 
     Args:
         db_name: The name of the database file.
@@ -21,9 +22,15 @@ def create_or_open_puzzle_db(db_name: str = "puzzle.db") -> Connection:
     cursor = conn.cursor()
 
     # Create tables if they don't exist
-    with open("schema.sql", "r") as f:  # Assuming you save the schema as schema.sql
+    with open("schema.sql", "r") as f:
         schema = f.read()
     cursor.executescript(schema)
-    conn.commit()
 
+    # Initialize ModelFamilies and Models tables
+    for family in model_families():
+        cursor.execute("INSERT OR IGNORE INTO ModelFamilies (model_family) VALUES (?)", (family,))
+        for model in models(family).split(','):
+            cursor.execute("INSERT OR IGNORE INTO Models (model_name, model_family) VALUES (?, ?)", (model, family))
+
+    conn.commit()
     return conn

@@ -44,3 +44,13 @@ CREATE TABLE IF NOT EXISTS YearRank (
     total_attempted INTEGER NOT NULL,
     success_rate REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ModelFamilies (
+    model_family TEXT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS Models (
+    model_name TEXT PRIMARY KEY,
+    model_family TEXT,
+    FOREIGN KEY (model_family) REFERENCES ModelFamilies(model_family)
+);

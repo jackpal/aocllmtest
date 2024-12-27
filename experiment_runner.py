@@ -16,7 +16,9 @@ def run_experiment():
         cursor.execute("SELECT model_family FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
         timed_out_families = [row[0] for row in cursor.fetchall()]
 
-        available_model_families = [mf for mf in model_families() if mf not in timed_out_families]
+        # Get available model families
+        cursor.execute("SELECT model_family FROM ModelFamilies WHERE model_family NOT IN (%s)" % ','.join('?'*len(timed_out_families)), timed_out_families)
+        available_model_families = [row[0] for row in cursor.fetchall()]
 
         if not available_model_families:
             # If all model families are timed out, find the one with the shortest remaining timeout
@@ -56,31 +58,20 @@ def run_experiment():
 
         puzzle_year, puzzle_day, puzzle_part = next_puzzle
         print(f"Attempting puzzle {puzzle_year}/{puzzle_day}/{puzzle_part}")
-        
+
         # Prioritize models that haven't been tried yet for this puzzle
         cursor.execute("""
-            SELECT model_family, model_name
-            FROM (
-                SELECT m.model_family, m.model_name,
-                       CASE WHEN e.experiment_id IS NULL THEN 0 ELSE 1 END as tried
-                FROM (
-                    SELECT DISTINCT model_family, model_name
-                    FROM (
-                        SELECT model_family, model_name FROM (
-                            SELECT model_family, model as model_name
-                            FROM (SELECT DISTINCT model_family FROM ModelFamilyRank), UNNEST(models(model_family)) AS model
-                        )
-                    )
-                ) m
-                LEFT JOIN Experiments e
-                ON m.model_family = e.model_family
-                AND m.model_name = e.model_name
-                AND e.puzzle_year = ?
-                AND e.puzzle_day = ?
-                AND e.puzzle_part = ?
-            )
-            WHERE model_family IN (%s)
-            ORDER BY tried, model_family, model_name
+            SELECT m.model_family, m.model_name
+            FROM Models m
+            LEFT JOIN Experiments e
+            ON m.model_family = e.model_family
+            AND m.model_name = e.model_name
+            AND e.puzzle_year = ?
+            AND e.puzzle_day = ?
+            AND e.puzzle_part = ?
+            WHERE e.experiment_id IS NULL
+            AND m.model_family IN (%s)
+            ORDER BY m.model_family, m.model_name
         """ % ','.join('?'*len(available_model_families)), (puzzle_year, puzzle_day, puzzle_part) + tuple(available_model_families))
 
         models_to_try = cursor.fetchall()
@@ -191,7 +182,7 @@ def run_experiment():
 
         # Update the ranking tables after each puzzle attempt
         update_ranking_tables(conn)
-        
+
 def update_ranking_tables(conn):
     """Updates the ModelRank, ModelFamilyRank, and YearRank tables based on experiment results."""
     cursor = conn.cursor()
@@ -234,6 +225,6 @@ def update_ranking_tables(conn):
     """)
 
     conn.commit()
-    
+
 if __name__ == "__main__":
     run_experiment()
