@@ -64,14 +64,14 @@
                     <th>Start Time</th>
                     <th>End Time</th>
                     <th>Error Message</th>
+                    <th>Previous Attempt Timed Out</th>
                 </tr>
             </thead>
             <tbody>
                 <!-- Experiments will be populated here -->
             </tbody>
         </table>
-    </div>
-    
+    </div>    
 
     <script>
         function updateStatus() {
@@ -178,18 +178,19 @@
 
                     data.forEach(experiment => {
                         const row = tableBody.insertRow();
-                        row.insertCell().textContent = experiment[0]; // ID
-                        row.insertCell().textContent = experiment[1]; // Model Family
-                        row.insertCell().textContent = experiment[2]; // Model Name
-                        row.insertCell().textContent = experiment[3]; // Year
-                        row.insertCell().textContent = experiment[4]; // Day
-                        row.insertCell().textContent = experiment[5]; // Part
-                        row.insertCell().textContent = experiment[8]; // Result
-                        row.insertCell().textContent = experiment[9] ? 'Yes' : 'No'; // Correct
-                        row.insertCell().textContent = experiment[10]; // Timeout
-                        row.insertCell().textContent = experiment[11]; // Start Time
-                        row.insertCell().textContent = experiment[12] ? experiment[12] : ''; // End Time
-                        row.insertCell().textContent = experiment[13] ? experiment[13] : ''; // Error Message
+                        row.insertCell().textContent = experiment.id;
+                        row.insertCell().textContent = experiment.model_family;
+                        row.insertCell().textContent = experiment.model_name;
+                        row.insertCell().textContent = experiment.year;
+                        row.insertCell().textContent = experiment.day;
+                        row.insertCell().textContent = experiment.part;
+                        row.insertCell().textContent = experiment.result;
+                        row.insertCell().textContent = experiment.correct ? 'Yes' : 'No';
+                        row.insertCell().textContent = experiment.timeout;
+                        row.insertCell().textContent = experiment.start_time;
+                        row.insertCell().textContent = experiment.end_time ? experiment.end_time : '';
+                        row.insertCell().textContent = experiment.error_message ? experiment.error_message : '';
+                        row.insertCell().textContent = experiment.previous_attempt_timed_out ? 'Yes' : 'No';
                     });
                 });
         }

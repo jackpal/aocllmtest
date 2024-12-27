@@ -55,7 +55,30 @@ def experiments():
     """Provides data for all experiments"""
     all_experiments = db.get_all_experiments()
     
-    return jsonify(all_experiments)
+    # Convert experiment tuples to dictionaries for easier JSON conversion
+    experiments_as_dicts = []
+    for exp in all_experiments:
+        exp_dict = {
+            "id": exp[0],
+            "model_family": exp[1],
+            "model_name": exp[2],
+            "year": exp[3],
+            "day": exp[4],
+            "part": exp[5],
+            "prompt": exp[6],
+            "program": exp[7],
+            "result": exp[8],
+            "answer": exp[9],
+            "correct": exp[10],
+            "timeout": exp[11],
+            "start_time": exp[12],
+            "end_time": exp[13],
+            "error_message": exp[14],
+            "previous_attempt_timed_out": exp[15]
+        }
+        experiments_as_dicts.append(exp_dict)
+    
+    return jsonify(experiments_as_dicts)
 
 @app.route("/experiments/<int:experiment_id>")
 def experiment_details(experiment_id):
