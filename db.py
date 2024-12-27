@@ -1,4 +1,3 @@
-# db.py
 import sqlite3
 from typing import List, Tuple, Dict, Any
 import datetime
@@ -31,7 +30,7 @@ def create_tables() -> None:
             UNIQUE(model_family, model_name, puzzle_year, puzzle_day, puzzle_part)
         )
     """)
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS quota_limits (
             model_family TEXT PRIMARY KEY,
@@ -42,81 +41,18 @@ def create_tables() -> None:
     conn.commit()
     conn.close()
 
-def add_experiment(model_family: str, model_name: str, puzzle_year: int, puzzle_day: int, puzzle_part: int, prompt: str, previous_attempt_timed_out: bool) -> int:
-    """Adds a new experiment to the database.
-
-    Args:
-        model_family: The model family.
-        model_name: The model name.
-        puzzle_year: The puzzle year.
-        puzzle_day: The puzzle day.
-        puzzle_part: The puzzle part.
-        prompt: The generated prompt.
-        previous_attempt_timed_out: Whether or not a previous attempt timed out
+def get_all_experiments() -> List[Tuple]:
+    """Retrieves all experiments from the database.
 
     Returns:
-        The ID of the newly created experiment.
-
-    Raises:
-        sqlite3.IntegrityError: If an experiment with the same unique combination already exists.
+        A list of tuples, where each tuple represents an experiment.
     """
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-
-    cursor.execute("""
-        INSERT INTO experiments (model_family, model_name, puzzle_year, puzzle_day, puzzle_part, prompt, previous_attempt_timed_out)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (model_family, model_name, puzzle_year, puzzle_day, puzzle_part, prompt, previous_attempt_timed_out))
-
-    experiment_id = cursor.lastrowid
-    conn.commit()
+    cursor.execute("SELECT * FROM experiments")
+    all_experiments = cursor.fetchall()
     conn.close()
-
-    return experiment_id
-
-def update_experiment(experiment_id: int, program: str = None, result: str = None, answer: str = None, correct: bool = None, timeout: int = None, error_message: str = None) -> None:
-    """Updates an existing experiment in the database.
-
-    Args:
-        experiment_id: The ID of the experiment to update.
-        program: The generated program (optional).
-        result: The result of running the program (optional).
-        answer: The output of the program (optional).
-        correct: Whether the answer is correct (optional).
-        timeout: The timeout used for running the program (optional).
-        error_message: Any error messages encountered (optional).
-    """
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-
-    # Retrieve the current values of the experiment from the database
-    cursor.execute("SELECT program, result, answer, correct, timeout, error_message FROM experiments WHERE experiment_id = ?", (experiment_id,))
-    current_values = cursor.fetchone()
-
-    # If a field is not provided (is None), use the current value from the database
-    program = program if program is not None else current_values[0]
-    result = result if result is not None else current_values[1]
-    answer = answer if answer is not None else current_values[2]
-    correct = correct if correct is not None else current_values[3]
-    timeout = timeout if timeout is not None else current_values[4]
-    error_message = error_message if error_message is not None else current_values[5]
-    
-    end_time_str = "CURRENT_TIMESTAMP" if result is not None else "NULL"
-
-    cursor.execute("""
-        UPDATE experiments
-        SET program = ?,
-            result = ?,
-            answer = ?,
-            correct = ?,
-            timeout = ?,
-            end_time = """ + end_time_str + """,
-            error_message = ?
-        WHERE experiment_id = ?
-    """, (program, result, answer, correct, timeout, error_message, experiment_id))
-
-    conn.commit()
-    conn.close()
+    return all_experiments
 
 def get_experiment_by_id(experiment_id: int) -> Tuple:
     """Retrieves an experiment from the database by its ID.
@@ -301,19 +237,6 @@ def get_quota_exceeded_families() -> List[str]:
     conn.close()
     return families
 
-def get_all_experiments() -> List[Tuple]:
-    """Retrieves all experiments from the database.
-
-    Returns:
-        A list of tuples, where each tuple represents an experiment.
-    """
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM experiments")
-    all_experiments = cursor.fetchall()
-    conn.close()
-    return all_experiments
-
 def get_earliest_quota_reset_time() -> datetime.datetime | None:
     """Gets the earliest time at which a quota will reset for any model family.
 
@@ -339,3 +262,79 @@ def get_earliest_quota_reset_time() -> datetime.datetime | None:
         return reset_time
     else:
         return None
+
+def add_or_update_experiment(model_family: str, model_name: str, puzzle_year: int, puzzle_day: int, puzzle_part: int, prompt: str, previous_attempt_timed_out: bool, program: str = None, result: str = None, answer: str = None, correct: bool = None, timeout: int = None, error_message: str = None) -> int:
+    """Adds a new experiment to the database or updates an existing one.
+
+    If an experiment with the same model_family, model_name, puzzle_year, puzzle_day, and puzzle_part already exists,
+    it is updated with the new values. Otherwise, a new experiment is inserted.
+
+    Args:
+        model_family: The model family.
+        model_name: The model name.
+        puzzle_year: The puzzle year.
+        puzzle_day: The puzzle day.
+        puzzle_part: The puzzle part.
+        prompt: The generated prompt.
+        previous_attempt_timed_out: Whether or not a previous attempt timed out
+        program: The generated program (optional).
+        result: The result of running the program (optional).
+        answer: The output of the program (optional).
+        correct: Whether the answer is correct (optional).
+        timeout: The timeout used for running the program (optional).
+        error_message: Any error messages encountered (optional).
+
+    Returns:
+        The ID of the newly created or updated experiment.
+    """
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+
+    # Check if the experiment already exists
+    cursor.execute("""
+        SELECT experiment_id, end_time, program, result, answer, correct, timeout, error_message
+        FROM experiments
+        WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
+    """, (model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
+    existing_experiment = cursor.fetchone()
+
+    if existing_experiment:
+        # Update existing experiment
+        experiment_id = existing_experiment[0]
+        existing_end_time = existing_experiment[1]
+        
+        # Use existing values for fields that are not being updated
+        program = program if program is not None else existing_experiment[2]
+        result = result if result is not None else existing_experiment[3]
+        answer = answer if answer is not None else existing_experiment[4]
+        correct = correct if correct is not None else existing_experiment[5]
+        timeout = timeout if timeout is not None else existing_experiment[6]
+        error_message = error_message if error_message is not None else existing_experiment[7]
+
+        end_time_str = "CURRENT_TIMESTAMP" if result is not None else "NULL"
+        
+        cursor.execute("""
+            UPDATE experiments
+            SET prompt = ?,
+                program = ?,
+                result = ?,
+                answer = ?,
+                correct = ?,
+                timeout = ?,
+                end_time = """ + end_time_str + """,
+                error_message = ?,
+                previous_attempt_timed_out = ?
+            WHERE experiment_id = ?
+        """, (prompt, program, result, answer, correct, timeout, error_message, previous_attempt_timed_out, experiment_id))
+    else:
+        # Insert new experiment
+        cursor.execute("""
+            INSERT INTO experiments (model_family, model_name, puzzle_year, puzzle_day, puzzle_part, prompt, previous_attempt_timed_out, program, result, answer, correct, timeout, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (model_family, model_name, puzzle_year, puzzle_day, puzzle_part, prompt, previous_attempt_timed_out, program, result, answer, correct, timeout, error_message))
+        experiment_id = cursor.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    return experiment_id
