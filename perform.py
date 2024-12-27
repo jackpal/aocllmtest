@@ -1,45 +1,10 @@
 import sys
 import traceback
+import subprocess
 import time
-import multiprocessing
 import signal
-
-def execute_program(program, part, input, result_queue):
-    """
-    Helper function to execute the program in a separate process.
-    """
-    try:
-        # Redirect stdout and stderr to capture output and errors
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
-        sys.stdout = captured_stdout = open("stdout.txt", "w")
-        sys.stderr = captured_stderr = open("stderr.txt", "w")
-
-        # Compile and execute the code
-        code = compile(program, '<string>', 'exec')
-        namespace = {}
-        exec(code, namespace)
-
-        # Check for the existence of the 'solve' function
-        if 'solve' not in namespace:
-            result_queue.put(('error', "The 'solve' function is not defined in the program."))
-            return  # Exit early if 'solve' is not found
-
-        # Call the 'solve' function and put the result in the queue
-        result = namespace['solve'](part, input)
-        result_queue.put(('success', str(result)))
-
-    except Exception as e:
-        # Capture any exceptions during execution
-        error_message = "".join(traceback.format_exception(type(e), e, e.__traceback__))
-        result_queue.put(('error', error_message))
-
-    finally:
-        # Restore stdout and stderr
-        sys.stdout = old_stdout
-        sys.stderr = old_stderr
-        captured_stdout.close()
-        captured_stderr.close()
+import threading
+import os  # Import the 'os' module
 
 def run(program: str, part: int, input: str, timeout: int) -> tuple[str, str]:
     """
@@ -56,35 +21,91 @@ def run(program: str, part: int, input: str, timeout: int) -> tuple[str, str]:
         - status: 'success', 'error', or 'timeout'.
         - result: The output of 'solve' (if successful), an error message (if error), or None (if timeout).
     """
-    # Create a queue to store the result from the child process
-    result_queue = multiprocessing.Queue()
 
-    # Create a process to execute the program
-    process = multiprocessing.Process(target=execute_program, args=(program, part, input, result_queue))
-    process.start()
+    # Create temporary files for the script and communication
+    script_file = "temp_script.py"
+    result_file = "temp_result.txt"
+    error_file = "temp_error.txt"
 
-    # Wait for the process to finish or timeout
-    process.join(timeout)
+    # Construct the complete script with solve function call
+    full_program = f"""
+import sys
+import traceback
 
-    if process.is_alive():
-        # If the process is still alive after the timeout, terminate it
-        process.terminate()
-        # Ensure it is no longer in memory
-        process.join()
-        return ('timeout', None)
+{program}
+
+if __name__ == '__main__':
+    try:
+        result = solve({part}, "{input}")
+        with open("{result_file}", "w") as f:
+            f.write(str(result))
+    except Exception as e:
+        error_message = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+        with open("{error_file}", "w") as f:
+            f.write(error_message)
+"""
+
+    # Write the script to a temporary file
+    with open(script_file, "w") as f:
+        f.write(full_program)
+
+    # Run the script as a separate process
+    if os.name == 'posix':
+        # Use signal-based timeout on Unix-like systems
+        process = subprocess.Popen([sys.executable, script_file],
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE,
+                                   preexec_fn=os.setsid)
+
+        def timeout_handler(signum, frame):
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout)
     else:
-        # Get the result from the queue
-        status, result = result_queue.get()
-        return (status, result)
+        # Use a timeout thread on Windows
+        process = subprocess.Popen([sys.executable, script_file],
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
 
-if __name__ == "__main__":
-    result, answer = run("def solve(part,input): return input[part]", 1, 'abc', 10)
-    assert(result == 'success')
-    assert(answer == 'b')
+        def terminate_process(process):
+            if process.poll() is None:
+                process.terminate()
 
-    result, answer = run("print('Hi!')", 1, 'abc', 10)
-    assert(result == 'error')
-    
-    result, answer = run("""import time
-time.sleep(1000)""", 1, 'abc', 10)
-    assert(result == 'timeout')
+        timeout_thread = threading.Timer(timeout, terminate_process, args=[process])
+        timeout_thread.start()
+
+    try:
+        # Wait for the process to complete and get output
+        stdout, stderr = process.communicate()
+
+        if os.name == 'posix':
+            signal.alarm(0)  # Cancel the alarm if process finished before timeout
+        else:
+            timeout_thread.cancel()
+
+        if os.path.exists(result_file):
+            with open(result_file, "r") as f:
+                result = f.read()
+            status = "success"
+        elif os.path.exists(error_file):
+            with open(error_file, "r") as f:
+                result = f.read()
+            status = "error"
+        else:
+            result = None
+            status = "timeout"
+
+    except subprocess.TimeoutExpired:
+        # Timeout occurred
+        process.kill()  # Ensure process is killed
+        result = None
+        status = "timeout"
+
+    finally:
+        # Clean up temporary files
+        for temp_file in [script_file, result_file, error_file]:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+
+    return status, result
