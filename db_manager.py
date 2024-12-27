@@ -1,5 +1,6 @@
 import sqlite3
 import argparse
+import os
 from db_util import create_or_open_puzzle_db
 
 def display_db_status(conn):
@@ -45,10 +46,21 @@ def delete_experiments(conn, args):
 
     conn.commit()
 
+def init_db(db_name="puzzle.db"):
+    """Deletes the existing database if it exists, and creates and initializes a new one."""
+    if os.path.exists(db_name):
+        os.remove(db_name)
+        print(f"Deleted existing database: {db_name}")
+
+    conn = create_or_open_puzzle_db(db_name)
+    print(f"Created and initialized new database: {db_name}")
+    conn.close()
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Database manager for the experiment database.")
     parser.add_argument("--status", action="store_true", help="Display the current database status")
     parser.add_argument("--delete", action="store_true", help="Delete experiment records")
+    parser.add_argument("--init", action="store_true", help="Initialize the database (deletes existing database if it exists)")
     parser.add_argument("--experiment_id", type=int, help="Experiment ID to delete")
     parser.add_argument("--model_family", type=str, help="Model family to delete experiments for")
     parser.add_argument("--model_name", type=str, help="Model name to delete experiments for")
@@ -56,12 +68,15 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    conn = create_or_open_puzzle_db()
+    if args.init:
+        init_db()
+    else:
+        conn = create_or_open_puzzle_db()
 
-    if args.status:
-        display_db_status(conn)
+        if args.status:
+            display_db_status(conn)
 
-    if args.delete:
-        delete_experiments(conn, args)
+        if args.delete:
+            delete_experiments(conn, args)
 
-    conn.close()
+        conn.close()
