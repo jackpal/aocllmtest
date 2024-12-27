@@ -19,6 +19,8 @@ And if the "Part 2" of the puzzle is "Calculate the product of the numbers inste
 
 Assume that the input is valid. Do not validate the input. Do not guard against infinite loops.
 
+The puzzle part to solve is passed to the program as either the string '1' or the string '2' in sys.argv[1]
+
 Think carefully. It is important to get the correct answer and for the program to run quickly.
 
 Use split('\n\n') to split chunks of the input that are separated by blank lines.
