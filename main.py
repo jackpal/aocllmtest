@@ -104,7 +104,60 @@ def main():
     parser.add_argument("--model-name", help="Filter by model name for deletion.")
     parser.add_argument("--year", type=int, help="Filter by year for deletion.")
     parser.add_argument("--day", type=int, help="Filter by day for deletion.")
+    parser.add_ar# main.py
+import argparse
+import db
+import strategy
+import webserver
+import sys
+import csv
+import threading
+import time
+import datetime
+
+# ... (other functions remain the same)
+
+def main():
+    """Parses command-line arguments and runs the appropriate functions."""
+    parser = argparse.ArgumentParser(description="Run Advent of Code experiments.")
+    parser.add_argument("--csv", metavar="output_file.csv", help="Generate a CSV report of the experiments.")
+    parser.add_argument("--webserver", action="store_true", help="Start the webserver.")
+    parser.add_argument("--port", type=int, default=5000, help="Port number for the webserver (default: 5000).")
+    parser.add_argument("--run-experiments", action="store_true", help="Run the experiments.")
+    parser.add_argument("--delete-experiments", action="store_true", help="Delete experiments based on filter criteria.")
+    parser.add_argument("--model-family", help="Filter by model family for deletion.")
+    parser.add_argument("--model-name", help="Filter by model name for deletion.")
+    parser.add_argument("--year", type=int, help="Filter by year for deletion.")
+    parser.add_argument("--day", type=int, help="Filter by day for deletion.")
     parser.add_argument("--part", type=int, help="Filter by part for deletion.")
+    parser.add_argument("--result", help="Filter by result for deletion.")
+
+    args = parser.parse_args()
+
+    # Create the database and tables if they don't exist
+    db.create_tables()
+
+    if args.csv:
+        generate_csv_report(args.csv)
+
+    if args.run_experiments:
+        experiment_thread = threading.Thread(target=run_experiments_thread, daemon=True)
+        experiment_thread.start()
+
+    if args.webserver:
+        print(f"Starting webserver on port {args.port}...")
+        # Update webserver to use the global current_status
+        webserver.current_status = lambda: current_status
+        webserver.app.run(debug=True, port=args.port)
+
+    if args.delete_experiments:
+        delete_experiments(args.model_family, args.model_name, args.year, args.day, args.part, args.result)
+
+    if not any(vars(args).values()):
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()gument("--part", type=int, help="Filter by part for deletion.")
     parser.add_argument("--result", help="Filter by result for deletion.")
 
     args = parser.parse_args()
@@ -123,7 +176,7 @@ def main():
         print("Starting webserver...")
         # Update webserver to use the global current_status
         webserver.current_status = lambda: current_status
-        webserver.app.run(debug=True)
+        webserver.app.run(debug=True, port=8000)
 
     if args.delete_experiments:
         delete_experiments(args.model_family, args.model_name, args.year, args.day, args.part, args.result)
