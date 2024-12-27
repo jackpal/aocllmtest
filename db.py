@@ -27,7 +27,8 @@ def create_tables() -> None:
             start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             end_time TIMESTAMP,
             error_message TEXT,
-            previous_attempt_timed_out BOOLEAN DEFAULT FALSE
+            previous_attempt_timed_out BOOLEAN DEFAULT FALSE,
+            UNIQUE(model_family, model_name, puzzle_year, puzzle_day, puzzle_part)
         )
     """)
     
@@ -55,6 +56,9 @@ def add_experiment(model_family: str, model_name: str, puzzle_year: int, puzzle_
 
     Returns:
         The ID of the newly created experiment.
+
+    Raises:
+        sqlite3.IntegrityError: If an experiment with the same unique combination already exists.
     """
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
@@ -70,24 +74,44 @@ def add_experiment(model_family: str, model_name: str, puzzle_year: int, puzzle_
 
     return experiment_id
 
-def update_experiment(experiment_id: int, program: str, result: str, answer: str, correct: bool, timeout: int, error_message: str) -> None:
+def update_experiment(experiment_id: int, program: str = None, result: str = None, answer: str = None, correct: bool = None, timeout: int = None, error_message: str = None) -> None:
     """Updates an existing experiment in the database.
 
     Args:
         experiment_id: The ID of the experiment to update.
-        program: The generated program.
-        result: The result of running the program (success, timeout, error).
-        answer: The output of the program (if successful).
-        correct: Whether the answer is correct.
-        timeout: The timeout used for running the program
-        error_message: Any error messages encountered.
+        program: The generated program (optional).
+        result: The result of running the program (optional).
+        answer: The output of the program (optional).
+        correct: Whether the answer is correct (optional).
+        timeout: The timeout used for running the program (optional).
+        error_message: Any error messages encountered (optional).
     """
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
 
+    # Retrieve the current values of the experiment from the database
+    cursor.execute("SELECT program, result, answer, correct, timeout, error_message FROM experiments WHERE experiment_id = ?", (experiment_id,))
+    current_values = cursor.fetchone()
+
+    # If a field is not provided (is None), use the current value from the database
+    program = program if program is not None else current_values[0]
+    result = result if result is not None else current_values[1]
+    answer = answer if answer is not None else current_values[2]
+    correct = correct if correct is not None else current_values[3]
+    timeout = timeout if timeout is not None else current_values[4]
+    error_message = error_message if error_message is not None else current_values[5]
+    
+    end_time_str = "CURRENT_TIMESTAMP" if result is not None else "NULL"
+
     cursor.execute("""
         UPDATE experiments
-        SET program = ?, result = ?, answer = ?, correct = ?, timeout = ?, error_message = ?, end_time = CURRENT_TIMESTAMP
+        SET program = ?,
+            result = ?,
+            answer = ?,
+            correct = ?,
+            timeout = ?,
+            end_time = """ + end_time_str + """,
+            error_message = ?
         WHERE experiment_id = ?
     """, (program, result, answer, correct, timeout, error_message, experiment_id))
 

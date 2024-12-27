@@ -4,6 +4,7 @@ import aoc_api
 import time
 from typing import List, Tuple, Dict
 import datetime
+import sqlite3
 
 def get_next_experiment() -> Tuple:
     """Determines the next experiment to run based on the defined strategy.
@@ -130,40 +131,42 @@ def run_experiment(model_family: str, model_name: str, year: int, day: int, part
     else:
         generated_program = program_result[1]
 
-    # 3. Add experiment to database
-    experiment_id = db.add_experiment(model_family, model_name, year, day, part, full_prompt, previous_attempt_timed_out)
+    # 3. Add experiment in database
+    try:
+        experiment_id = db.add_experiment(model_family, model_name, year, day, part, full_prompt, previous_attempt_timed_out)
+    except sqlite3.IntegrityError:
+        print(f"Skipping duplicate experiment: {model_family} {model_name}, Year: {year}, Day: {day}, Part: {part}")
+        return
 
     # 4. Run program
     run_result = aoc_api.run_program(year, day, part, generated_program, timeout) # Pass year, day, and part to run_program
 
     if run_result[0] == 'error':
         print(f"Error running program: {run_result[1]}")
-        db.update_experiment(experiment_id, generated_program, 'error', None, None, timeout, run_result[1])
+        db.update_experiment(experiment_id, program=generated_program, result='error', error_message=run_result[1])
         return
     elif run_result[0] == 'timeout':
         print(f"Program timed out after {timeout} seconds.")
         
         if previous_attempt_timed_out == False:
           # Regenerate the prompt, marking it as having timed out previously
-          db.update_experiment(experiment_id, generated_program, 'timeout', None, None, timeout, f"Program timed out after {timeout} seconds.")
+          db.update_experiment(experiment_id, program=generated_program, result='timeout', timeout=timeout, error_message=f"Program timed out after {timeout} seconds.")
           run_experiment(model_family, model_name, year, day, part, timeout, True)
           return
         elif timeout == 10:
           
           # Try again with a longer timeout
-          db.update_experiment(experiment_id, generated_program, 'timeout', None, None, timeout, f"Program timed out after {timeout} seconds.")
+          db.update_experiment(experiment_id, program=generated_program, result='timeout', timeout=timeout, error_message=f"Program timed out after {timeout} seconds.")
           run_experiment(model_family, model_name, year, day, part, 100, True)
           return
         elif timeout == 100:
           # Try again with an even longer timeout
-          db.update_experiment(experiment_id, generated_program, 'timeout', None, None, timeout, f"Program timed out after {timeout} seconds.")
+          db.update_experiment(experiment_id, program=generated_program, result='timeout', timeout=timeout, error_message=f"Program timed out after {timeout} seconds.")
           run_experiment(model_family, model_name, year, day, part, 1000, True)
           return
         else:
-          db.update_experiment(experiment_id, generated_program, 'timeout', None, None, timeout, f"Program timed out after {timeout} seconds.")
+          db.update_experiment(experiment_id, program=generated_program, result='timeout', timeout=timeout, error_message=f"Program timed out after {timeout} seconds.")
           return
-
-          
     else:
         program_output = run_result[1]
 
@@ -171,7 +174,7 @@ def run_experiment(model_family: str, model_name: str, year: int, day: int, part
     is_correct = aoc_api.check_answer(year, day, part, program_output)
 
     # 6. Update experiment in database
-    db.update_experiment(experiment_id, generated_program, 'success', program_output, is_correct, timeout, None)
+    db.update_experiment(experiment_id, program=generated_program, result='success', answer=program_output, correct=is_correct)
 
     print(f"Experiment {experiment_id} completed. Correct: {is_correct}")
 
