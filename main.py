@@ -92,30 +92,17 @@ def delete_experiments(model_family: str, model_name: str, year: int, day: int, 
     conn.close()
 
     print(f"Deleted {cursor.rowcount} experiments.")
-    
-def main():
-    """Parses command-line arguments and runs the appropriate functions."""
-    parser = argparse.ArgumentParser(description="Run Advent of Code experiments.")
-    parser.add_argument("--csv", metavar="output_file.csv", help="Generate a CSV report of the experiments.")
-    parser.add_argument("--webserver", action="store_true", help="Start the webserver.")
-    parser.add_argument("--run-experiments", action="store_true", help="Run the experiments.")
-    parser.add_argument("--delete-experiments", action="store_true", help="Delete experiments based on filter criteria.")
-    parser.add_argument("--model-family", help="Filter by model family for deletion.")
-    parser.add_argument("--model-name", help="Filter by model name for deletion.")
-    parser.add_argument("--year", type=int, help="Filter by year for deletion.")
-    parser.add_argument("--day", type=int, help="Filter by day for deletion.")
-    parser.add_ar# main.py
-import argparse
-import db
-import strategy
-import webserver
-import sys
-import csv
-import threading
-import time
-import datetime
 
-# ... (other functions remain the same)
+def delete_errors():
+    """Deletes all experiments that have a result of 'error'."""
+    conn = db.sqlite3.connect(db.DATABASE_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM experiments WHERE result = 'error'")
+    conn.commit()
+    conn.close()
+
+    print(f"Deleted {cursor.rowcount} experiments with result 'error'.")
 
 def main():
     """Parses command-line arguments and runs the appropriate functions."""
@@ -131,6 +118,7 @@ def main():
     parser.add_argument("--day", type=int, help="Filter by day for deletion.")
     parser.add_argument("--part", type=int, help="Filter by part for deletion.")
     parser.add_argument("--result", help="Filter by result for deletion.")
+    parser.add_argument("--delete-errors", action="store_true", help="Delete all experiments with result 'error'.")
 
     args = parser.parse_args()
 
@@ -152,6 +140,9 @@ def main():
 
     if args.delete_experiments:
         delete_experiments(args.model_family, args.model_name, args.year, args.day, args.part, args.result)
+
+    if args.delete_errors:
+        delete_errors()
 
     if not any(vars(args).values()):
         parser.print_help()
