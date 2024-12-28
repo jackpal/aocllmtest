@@ -16,6 +16,7 @@ def input(puzzle_year, puzzle_day):
     return Puzzle(year=puzzle_year, day=puzzle_day).input_data
 
 def check_answer(puzzle_year, puzzle_day, puzzle_part, answer):
+    answer = answer.strip()
     puzzle = Puzzle(year=puzzle_year, day=puzzle_day)
     if puzzle_part == 1:
         if puzzle.answered_a:
