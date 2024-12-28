@@ -135,15 +135,32 @@ def run_experiment():
 
         print(f"Attempting puzzle {puzzle_year}/{puzzle_day}/{puzzle_part} with model {model_family}/{model_name}")
 
-        # Check for quota timeouts for this model family
-        cursor.execute("SELECT model_family FROM QuotaTimeouts WHERE timeout_until > ? AND model_family = ?", (datetime.datetime.now(), model_family))
-        is_timed_out = cursor.fetchone() is not None
+        # Check for quota timeouts
+        cursor.execute("SELECT model_family FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
+        timed_out_families = [row[0] for row in cursor.fetchall()]
 
-        if is_timed_out:
-            # If this model family is timed out, skip it for now
+        # If all model families are timed-out, find the one with the *earliest* timeout expiry
+        if set(timed_out_families) == set(model_families()):
+            cursor.execute("SELECT MIN(timeout_until) FROM QuotaTimeouts")
+            next_available_time_str = cursor.fetchone()[0]  # Fetch as string
+
+            if next_available_time_str is not None:
+                # Convert the string to a datetime object
+                next_available_time = datetime.datetime.fromisoformat(next_available_time_str)
+
+                sleep_duration = max(0, (next_available_time - datetime.datetime.now()).total_seconds())
+                print(f"All model families are timed out. Sleeping for {sleep_duration:.0f} seconds (until {next_available_time}).")
+                time.sleep(sleep_duration)
+                continue  # Go to the next iteration of the while loop
+            else:
+                print("Warning: No timeout information found, but all model families seem timed out. Retrying.")
+                continue
+
+        # Check if the chosen model_family is timed-out
+        if model_family in timed_out_families:
             print(f"Model family {model_family} is currently timed out. Skipping.")
-            continue  # Go to the next iteration of the while loop
-
+            continue  # Skip to the next iteration
+        
         for timeout in [10, 100]:
             previous_attempt_timed_out = timeout > 10
             instructions_result = puzzle_instructions(puzzle_year, puzzle_day, puzzle_part)
