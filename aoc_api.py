@@ -61,7 +61,7 @@ def create_prompt(model_family: str, model_name: str, puzzle_year: int, puzzle_d
     full_prompt = system_prompt + '\n\n' + puzzle_instructions + '\n\nOnly print the answer for part {puzzle_part}\n'
 
     if previous_attempt_timed_out:
-        full_prompt += " Note: Previous attempts to solve this puzzle timed out. Use algorithms with good O(n) performance, and techniques such as @cache to make the program run faster. The input may be very large."
+        full_prompt += " Note: Previous attempts to solve this puzzle timed out. Use algorithms with good O(n) performance, and techniques such as dynamic programming and memoization to make the program run faster. The input may be very large."
     return ("success", full_prompt)
 
 def generate_program(model_family: str, model_name: str, full_prompt: str, puzzle_year: int, puzzle_day: int, puzzle_part: int) -> Tuple[str, str]:

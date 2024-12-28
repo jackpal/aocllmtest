@@ -119,7 +119,7 @@ def run_experiment():
             print(f"Model family {model_family} is currently timed out. Skipping.")
             continue  # Go to the next iteration of the while loop
 
-        for timeout in [10, 100, 1000]:
+        for timeout in [10, 100]:
             previous_attempt_timed_out = timeout > 10
             instructions_result = puzzle_instructions(puzzle_year, puzzle_day, puzzle_part)
 
