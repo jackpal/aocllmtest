@@ -119,32 +119,129 @@ def get_next_puzzle_to_solve(cursor):
         return puzzle_year, puzzle_day, puzzle_part, model_family, model_name
     else:
         return None  # Indicates no more puzzles to solve
-    
+
+def run_experiment_for_puzzle(puzzle_year, puzzle_day, puzzle_part, model_family, model_name):
+    """Runs the experiment for a single puzzle."""
+    conn = create_or_open_puzzle_db()
+    cursor = conn.cursor()
+
+    for timeout in [10, 100]:
+        previous_attempt_timed_out = timeout > 10
+        instructions_result = puzzle_instructions(puzzle_year, puzzle_day, puzzle_part)
+
+        if instructions_result[0] == 'error':
+            print(f"Error getting instructions: {instructions_result[1]}")
+            continue
+        elif instructions_result[0] == 'sequence':
+            print(f"Need to solve {instructions_result[1]} first")
+            continue
+        elif instructions_result[0] == 'success':
+            instructions = instructions_result[1]
+
+        prompt_result = create_prompt(
+            model_family, model_name, puzzle_year, puzzle_day, puzzle_part,
+            previous_attempt_timed_out, instructions
+        )
+
+        if prompt_result[0] == 'error':
+            print(f"Error creating prompt: {prompt_result[1]}")
+            continue
+        elif prompt_result[0] == 'success':
+            full_prompt = prompt_result[1]
+
+        cursor.execute("""
+            INSERT OR IGNORE INTO Experiments (
+                model_family, model_name, puzzle_year, puzzle_day, puzzle_part,
+                prompt, experiment_started_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (model_family, model_name, puzzle_year, puzzle_day, puzzle_part, full_prompt, datetime.datetime.now()))
+        conn.commit()
+
+        print(f"Running experiment for {model_family}/{model_name} on {puzzle_year}/{puzzle_day}/{puzzle_part} with timeout {timeout}")
+
+        generate_result = generate_program(
+            model_family, model_name, full_prompt, puzzle_year, puzzle_day, puzzle_part
+        )
+
+        if generate_result[0] == 'error':
+            print(f"Error generating program: {generate_result[1]}")
+            cursor.execute("""
+                UPDATE Experiments
+                SET run_status = 'error', run_error_message = ?, experiment_finished_at = ?
+                WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
+            """, (generate_result[1], datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
+            conn.commit()
+            continue
+        elif generate_result[0] == 'quota':
+            print(f"Quota exhausted for {model_family}: {generate_result[1]}")
+            cursor.execute("INSERT OR REPLACE INTO QuotaTimeouts (model_family, timeout_until) VALUES (?, ?)",
+                           (model_family, datetime.datetime.now() + datetime.timedelta(hours=1)))
+            conn.commit()
+            conn.close()
+            return  # Exit early on quota error
+        elif generate_result[0] == 'success':
+            program = generate_result[1]
+
+        cursor.execute("""
+            UPDATE Experiments
+            SET program = ?
+            WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
+        """, (program, model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
+        conn.commit()
+
+        run_result = run_program(puzzle_year, puzzle_day, puzzle_part, program, timeout)
+
+        if run_result[0] == 'error':
+            print(f"Error running program: {run_result[1]}")
+            cursor.execute("""
+                UPDATE Experiments
+                SET run_status = 'error', run_error_message = ?, experiment_finished_at = ?
+                WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
+            """, (run_result[1], datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
+            conn.commit()
+            continue
+        elif run_result[0] == 'timeout':
+            print(f"Program timed out after {run_result[1]} seconds")
+            cursor.execute("""
+                UPDATE Experiments
+                SET run_status = 'timeout', run_timeout_seconds = ?, experiment_finished_at = ?
+                WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
+            """, (run_result[1], datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
+            conn.commit()
+            if timeout == 100:
+                break  # Give up on this model/puzzle combination after the longest timeout
+            else:
+                continue # Try again with a longer timeout
+        elif run_result[0] == 'answer':
+            answer = run_result[1]
+            is_correct = check_answer(puzzle_year, puzzle_day, puzzle_part, answer)
+            print(f"Answer: {answer}, Correct: {is_correct}")
+            cursor.execute("""
+                UPDATE Experiments
+                SET run_status = 'answer', answer = ?, answer_is_correct = ?, experiment_finished_at = ?
+                WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
+            """, (answer, is_correct, datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
+            conn.commit()
+            break  # Move on to the next model after getting an answer
+
+    conn.close()
+
 def run_experiment():
-    """Runs the experiment, iterating through puzzles and models."""
+    """Runs the experiment, processing one puzzle at a time."""
     conn = create_or_open_puzzle_db()
     cursor = conn.cursor()
 
     while True:
-        # Get the next puzzle to solve
-        next_puzzle = get_next_puzzle_to_solve(cursor)
-        if next_puzzle is None:
-            print("All puzzles have been attempted.")
-            conn.close()
-            return
-
-        puzzle_year, puzzle_day, puzzle_part, model_family, model_name = next_puzzle
-
-        print(f"Attempting puzzle {puzzle_year}/{puzzle_day}/{puzzle_part} with model {model_family}/{model_name}")
-
-        # Check for quota timeouts
+        # Check for quota timeouts for all model families
         cursor.execute("SELECT model_family FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
         timed_out_families = [row[0] for row in cursor.fetchall()]
 
-        # If all model families are timed-out, find the one with the *earliest* timeout expiry
-        if set(timed_out_families) == set(model_families()):
+        all_families_timed_out = set(timed_out_families) == set(model_families())
+
+        if all_families_timed_out:
+            # If all model families are timed out, find the one with the *earliest* timeout expiry
             cursor.execute("SELECT MIN(timeout_until) FROM QuotaTimeouts")
-            next_available_time_str = cursor.fetchone()[0]  # Fetch as string
+            next_available_time_str = cursor.fetchone()[0]
 
             if next_available_time_str is not None:
                 # Convert the string to a datetime object
@@ -153,116 +250,31 @@ def run_experiment():
                 sleep_duration = max(0, (next_available_time - datetime.datetime.now()).total_seconds())
                 print(f"All model families are timed out. Sleeping for {sleep_duration:.0f} seconds (until {next_available_time}).")
                 time.sleep(sleep_duration)
-                continue  # Go to the next iteration of the while loop
+                continue  # Skip puzzle submission and go to the next iteration
             else:
                 print("Warning: No timeout information found, but all model families seem timed out. Retrying.")
-                continue
 
-        # Check if the chosen model_family is timed-out
+        # Get the next puzzle to solve
+        next_puzzle = get_next_puzzle_to_solve(cursor)
+        if next_puzzle is None:
+            print("All puzzles have been attempted.")
+            break  # Exit the loop if no more puzzles
+
+        puzzle_year, puzzle_day, puzzle_part, model_family, model_name = next_puzzle
+
         if model_family in timed_out_families:
+            # If this model family is timed out, skip it for now
             print(f"Model family {model_family} is currently timed out. Skipping.")
-            continue  # Skip to the next iteration
-        
-        for timeout in [10, 100]:
-            previous_attempt_timed_out = timeout > 10
-            instructions_result = puzzle_instructions(puzzle_year, puzzle_day, puzzle_part)
+            continue
 
-            if instructions_result[0] == 'error':
-                print(f"Error getting instructions: {instructions_result[1]}")
-                continue
-            elif instructions_result[0] == 'sequence':
-                print(f"Need to solve {instructions_result[1]} first")
-                continue
-            elif instructions_result[0] == 'success':
-                instructions = instructions_result[1]
-
-            prompt_result = create_prompt(
-                model_family, model_name, puzzle_year, puzzle_day, puzzle_part,
-                previous_attempt_timed_out, instructions
-            )
-
-            if prompt_result[0] == 'error':
-                print(f"Error creating prompt: {prompt_result[1]}")
-                continue
-            elif prompt_result[0] == 'success':
-                full_prompt = prompt_result[1]
-
-            cursor.execute("""
-                INSERT OR IGNORE INTO Experiments (
-                    model_family, model_name, puzzle_year, puzzle_day, puzzle_part,
-                    prompt, experiment_started_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (model_family, model_name, puzzle_year, puzzle_day, puzzle_part, full_prompt, datetime.datetime.now()))
-            conn.commit()
-
-            print(f"Running experiment for {model_family}/{model_name} on {puzzle_year}/{puzzle_day}/{puzzle_part} with timeout {timeout}")
-
-            generate_result = generate_program(
-                model_family, model_name, full_prompt, puzzle_year, puzzle_day, puzzle_part
-            )
-
-            if generate_result[0] == 'error':
-                print(f"Error generating program: {generate_result[1]}")
-                cursor.execute("""
-                    UPDATE Experiments
-                    SET run_status = 'error', run_error_message = ?, experiment_finished_at = ?
-                    WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
-                """, (generate_result[1], datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
-                conn.commit()
-                continue
-            elif generate_result[0] == 'quota':
-                print(f"Quota exhausted for {model_family}: {generate_result[1]}")
-                cursor.execute("INSERT OR REPLACE INTO QuotaTimeouts (model_family, timeout_until) VALUES (?, ?)",
-                               (model_family, datetime.datetime.now() + datetime.timedelta(hours=1)))
-                conn.commit()
-                break # Exit the timeout loop
-            elif generate_result[0] == 'success':
-                program = generate_result[1]
-
-            cursor.execute("""
-                UPDATE Experiments
-                SET program = ?
-                WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
-            """, (program, model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
-            conn.commit()
-
-            run_result = run_program(puzzle_year, puzzle_day, puzzle_part, program, timeout)
-
-            if run_result[0] == 'error':
-                print(f"Error running program: {run_result[1]}")
-                cursor.execute("""
-                    UPDATE Experiments
-                    SET run_status = 'error', run_error_message = ?, experiment_finished_at = ?
-                    WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
-                """, (run_result[1], datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
-                conn.commit()
-                continue
-            elif run_result[0] == 'timeout':
-                print(f"Program timed out after {run_result[1]} seconds")
-                cursor.execute("""
-                    UPDATE Experiments
-                    SET run_status = 'timeout', run_timeout_seconds = ?, experiment_finished_at = ?
-                    WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
-                """, (run_result[1], datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
-                conn.commit()
-                if timeout == 1000:
-                    break  # Give up on this model/puzzle combination after the longest timeout
-                else:
-                    continue # Try again with a longer timeout
-            elif run_result[0] == 'answer':
-                answer = run_result[1]
-                is_correct = check_answer(puzzle_year, puzzle_day, puzzle_part, answer)
-                print(f"Answer: {answer}, Correct: {is_correct}")
-                cursor.execute("""
-                    UPDATE Experiments
-                    SET run_status = 'answer', answer = ?, answer_is_correct = ?, experiment_finished_at = ?
-                    WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
-                """, (answer, is_correct, datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
-                conn.commit()
-                break  # Move on to the next model after getting an answer
+        # Run the experiment for the selected puzzle
+        print(f"Attempting puzzle {puzzle_year}/{puzzle_day}/{puzzle_part} with model {model_family}/{model_name}")
+        run_experiment_for_puzzle(puzzle_year, puzzle_day, puzzle_part, model_family, model_name)
 
         # Update the ranking tables after each puzzle attempt
         update_ranking_tables(conn)
+
+    conn.close()
 
 def update_ranking_tables(conn):
     """Updates the ModelRank, ModelFamilyRank, and YearRank tables based on experiment results."""
