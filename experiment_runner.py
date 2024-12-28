@@ -6,8 +6,15 @@ from db_util import create_or_open_puzzle_db
 
 def get_next_puzzle_to_solve(cursor):
     """
-    Determines the next puzzle to solve based on the prioritization rules.
+    Determines the next puzzle to solve based on the prioritization rules:
+    1. Descending years
+    2. Ascending days
+    3. Ascending parts
+    4. Ascending model families
+    5. Ascending models
+    Puzzles that have already been attempted are skipped.
     """
+
     cursor.execute("""
         SELECT
             e.puzzle_year,
@@ -30,7 +37,7 @@ def get_next_puzzle_to_solve(cursor):
     if latest_solved:
         latest_year, latest_day, latest_part, _, _ = latest_solved
     else:
-        latest_year, latest_day, latest_part = 2024, 0, 0  # Start from the end 2024, day 0, part 0
+        latest_year, latest_day, latest_part = 2024, 0, 0
 
     cursor.execute("""
         WITH generate_series(value) AS (
@@ -50,9 +57,27 @@ def get_next_puzzle_to_solve(cursor):
             SELECT DISTINCT puzzle_year FROM (
                 SELECT puzzle_year FROM Experiments
                 UNION ALL
+                SELECT 2015 AS puzzle_year
+                UNION ALL
+                SELECT 2016 AS puzzle_year
+                UNION ALL
+                SELECT 2017 AS puzzle_year
+                UNION ALL
+                SELECT 2018 AS puzzle_year
+                UNION ALL
+                SELECT 2019 AS puzzle_year
+                UNION ALL
+                SELECT 2020 AS puzzle_year
+                UNION ALL
+                SELECT 2021 AS puzzle_year
+                UNION ALL
+                SELECT 2022 AS puzzle_year
+                UNION ALL
+                SELECT 2023 AS puzzle_year
+                UNION ALL
                 SELECT 2024 AS puzzle_year
             )
-        ) y ON y.puzzle_year <= ?
+        ) y
         CROSS JOIN (
             SELECT DISTINCT puzzle_day FROM (
                 SELECT puzzle_day FROM Experiments
@@ -83,7 +108,7 @@ def get_next_puzzle_to_solve(cursor):
             m.model_family ASC,
             m.model_name ASC
         LIMIT 1
-    """, (latest_year,))
+    """)
 
     next_puzzle = cursor.fetchone()
 
@@ -103,8 +128,8 @@ def run_experiment():
         next_puzzle = get_next_puzzle_to_solve(cursor)
         if next_puzzle is None:
             print("All puzzles have been attempted.")
-            time.sleep(60)
-            continue
+            conn.close()
+            return
 
         puzzle_year, puzzle_day, puzzle_part, model_family, model_name = next_puzzle
 
