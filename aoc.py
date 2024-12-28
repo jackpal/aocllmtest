@@ -32,6 +32,12 @@ def check_answer(puzzle_year, puzzle_day, puzzle_part, answer):
     elif puzzle_part == 2:
         if puzzle.answered_b:
             return puzzle.answer_b == answer
+        if not puzzle.answered_a:
+            raise Exception(f'Can\'t check part 2 before answering part 1.')
+        # Manually check this because the Puzzle class will raise an exception
+        # if answer_b is the same as answer_a.
+        if puzzle.answer_a == answer:
+            return False
         puzzle.answer_b = answer
         return puzzle.answered_b
     else:
