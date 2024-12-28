@@ -11,7 +11,7 @@ def puzzle_solved(puzzle_year, puzzle_day, puzzle_part):
         raise Exception(f'Unknown part {puzzle_part}')
 
 def puzzle_prose(puzzle_year, puzzle_day, puzzle_part):
-    prose = BeautifulSoup(Puzzle(year=puzzle_year, day=puzzle_day)._get_prose())
+    prose = BeautifulSoup(Puzzle(year=puzzle_year, day=puzzle_day)._get_prose(), features="html.parser")
     articles = [article.text for article in prose.find_all('article', class_='day-desc')]
     if not articles:
         return prose.text
