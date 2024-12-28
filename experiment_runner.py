@@ -40,6 +40,13 @@ def get_next_puzzle_to_solve(cursor):
         latest_year, latest_day, latest_part = 2024, 0, 0  # Start from the end 2024, day 0, part 0
 
     cursor.execute("""
+        WITH RECURSIVE generate_series(value) AS (
+            SELECT 1
+            UNION ALL
+            SELECT value + 1
+            FROM generate_series
+            WHERE value < 25
+        )
         SELECT
             m.model_family, m.model_name, y.puzzle_year, d.puzzle_day, p.puzzle_part
         FROM
@@ -47,7 +54,7 @@ def get_next_puzzle_to_solve(cursor):
         CROSS JOIN (
             SELECT DISTINCT puzzle_year FROM (
                 SELECT puzzle_year FROM Experiments
-                UNION
+                UNION ALL
                 SELECT 2024 AS puzzle_year
             )
         ) y ON y.puzzle_year <= ?
@@ -55,7 +62,7 @@ def get_next_puzzle_to_solve(cursor):
             SELECT DISTINCT puzzle_day FROM (
                 SELECT puzzle_day FROM Experiments
                 UNION
-                SELECT generate_series(1,25) AS puzzle_day
+                SELECT puzzle_day FROM generate_series
             )
         ) d
         CROSS JOIN (
