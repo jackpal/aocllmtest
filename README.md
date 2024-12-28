@@ -27,7 +27,7 @@ Follow instructions at <https://github.com/wimglenn/advent-of-code-data>
 3. From visual studio code's terminal:
 
 ``` shell
-% python
+% python3
 >>> import keyring
 >>> keyring.set_password("aocllm", "google-ai-studio", "YOUR_KEY_HERE")
 >>> exit
@@ -36,13 +36,13 @@ Follow instructions at <https://github.com/wimglenn/advent-of-code-data>
 ## Running the LLM tester
 
 ``` shell
-caffeinate python experiment_runner.py
+caffeinate python3 experiment_runner.py
 ```
 
 ## Observing progress with a simple web browser
 
 ``` shell
-python web_server.py
+python3 web_server.py
 ```
 
 ## Blog post about the process of writing this program
