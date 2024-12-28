@@ -4,83 +4,118 @@ import datetime
 from aoc_api import *
 from db_util import create_or_open_puzzle_db
 
+def get_next_puzzle_to_solve(cursor):
+    """
+    Determines the next puzzle to solve based on the prioritization rules:
+    1. Descending years
+    2. Ascending days
+    3. Ascending parts
+    4. Ascending model families
+    5. Ascending models
+    Puzzles that have already been attempted are skipped.
+    """
+
+    cursor.execute("""
+        SELECT
+            e.puzzle_year,
+            e.puzzle_day,
+            e.puzzle_part,
+            e.model_family,
+            e.model_name
+        FROM
+            Experiments e
+        WHERE
+            e.answer_is_correct = 1
+        ORDER BY
+            e.puzzle_year DESC,
+            e.puzzle_day DESC,
+            e.puzzle_part DESC
+        LIMIT 1
+    """)
+    latest_solved = cursor.fetchone()
+
+    if latest_solved:
+        latest_year, latest_day, latest_part, _, _ = latest_solved
+    else:
+        latest_year, latest_day, latest_part = 2024, 0, 0  # Start from the end 2024, day 0, part 0
+
+    cursor.execute("""
+        SELECT
+            m.model_family, m.model_name, y.puzzle_year, d.puzzle_day, p.puzzle_part
+        FROM
+            Models m
+        CROSS JOIN (
+            SELECT DISTINCT puzzle_year FROM (
+                SELECT puzzle_year FROM Experiments
+                UNION
+                SELECT 2024 AS puzzle_year
+            )
+        ) y ON y.puzzle_year <= ?
+        CROSS JOIN (
+            SELECT DISTINCT puzzle_day FROM (
+                SELECT puzzle_day FROM Experiments
+                UNION
+                SELECT generate_series(1,25) AS puzzle_day
+            )
+        ) d
+        CROSS JOIN (
+            SELECT DISTINCT puzzle_part FROM (
+                SELECT puzzle_part FROM Experiments
+                UNION
+                SELECT 1 AS puzzle_part
+                UNION
+                SELECT 2 AS puzzle_part
+            )
+        ) p
+        LEFT JOIN
+            Experiments e ON m.model_family = e.model_family
+            AND m.model_name = e.model_name
+            AND y.puzzle_year = e.puzzle_year
+            AND d.puzzle_day = e.puzzle_day
+            AND p.puzzle_part = e.puzzle_part
+        WHERE e.experiment_id IS NULL
+        ORDER BY
+            y.puzzle_year DESC,
+            d.puzzle_day ASC,
+            p.puzzle_part ASC,
+            m.model_family ASC,
+            m.model_name ASC
+        LIMIT 1
+    """, (latest_year,))
+
+    next_puzzle = cursor.fetchone()
+
+    if next_puzzle:
+        model_family, model_name, puzzle_year, puzzle_day, puzzle_part = next_puzzle
+        return puzzle_year, puzzle_day, puzzle_part, model_family, model_name
+    else:
+        return None  # Indicates no more puzzles to solve
+
 def run_experiment():
     """Runs the experiment, iterating through puzzles and models."""
     conn = create_or_open_puzzle_db()
     cursor = conn.cursor()
 
     while True:
-        model_family_to_run = None
-
-        # Check for quota timeouts
-        cursor.execute("SELECT model_family FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
-        timed_out_families = [row[0] for row in cursor.fetchall()]
-
-        # Get available model families
-        cursor.execute("SELECT model_family FROM ModelFamilies WHERE model_family NOT IN (%s)" % ','.join('?'*len(timed_out_families)), timed_out_families)
-        available_model_families = [row[0] for row in cursor.fetchall()]
-
-        if not available_model_families:
-            # If all model families are timed out, find the one with the shortest remaining timeout
-            cursor.execute("SELECT model_family, MIN(timeout_until) FROM QuotaTimeouts")
-            model_family, next_available_time = cursor.fetchone()
-            sleep_duration = (next_available_time - datetime.datetime.now()).total_seconds()
-            print(f"All model families are timed out. Waiting for {model_family} to be available again in {sleep_duration:.0f} seconds.")
-            time.sleep(sleep_duration)
-            continue
-
-        # Select the next puzzle to solve
-        # Find the latest solved puzzle
-        cursor.execute("""
-            SELECT puzzle_year, puzzle_day, puzzle_part
-            FROM Experiments
-            WHERE answer_is_correct = 1
-            ORDER BY puzzle_year DESC, puzzle_day DESC, puzzle_part DESC
-            LIMIT 1
-        """)
-        latest_solved = cursor.fetchone()
-
-        if latest_solved:
-            latest_year, latest_day, latest_part = latest_solved
-        else:
-            latest_year, latest_day, latest_part = 2024, 0, 0  # Start from the end 2024, day 0, part 0
-
-        if latest_part == 1 and latest_day < 25:
-            next_puzzle = (latest_year, latest_day, 2)
-        elif latest_day < 24:
-            next_puzzle = (latest_year, latest_day + 1, 1)
-        elif latest_year > 2015:
-            next_puzzle = (latest_year - 1, 1, 1)
-        else:
+        # Get the next puzzle to solve
+        next_puzzle = get_next_puzzle_to_solve(cursor)
+        if next_puzzle is None:
             print("All puzzles have been attempted.")
             time.sleep(60)
             continue
 
-        puzzle_year, puzzle_day, puzzle_part = next_puzzle
-        print(f"Attempting puzzle {puzzle_year}/{puzzle_day}/{puzzle_part}")
+        puzzle_year, puzzle_day, puzzle_part, model_family, model_name = next_puzzle
 
-        # Prioritize models that haven't been tried yet for this puzzle
-        cursor.execute("""
-            SELECT m.model_family, m.model_name
-            FROM Models m
-            LEFT JOIN Experiments e
-            ON m.model_family = e.model_family
-            AND m.model_name = e.model_name
-            AND e.puzzle_year = ?
-            AND e.puzzle_day = ?
-            AND e.puzzle_part = ?
-            WHERE e.experiment_id IS NULL
-            AND m.model_family IN (%s)
-            ORDER BY m.model_family, m.model_name
-        """ % ','.join('?'*len(available_model_families)), (puzzle_year, puzzle_day, puzzle_part) + tuple(available_model_families))
+        print(f"Attempting puzzle {puzzle_year}/{puzzle_day}/{puzzle_part} with model {model_family}/{model_name}")
 
-        models_to_try = cursor.fetchall()
+        # Check for quota timeouts for this model family
+        cursor.execute("SELECT model_family FROM QuotaTimeouts WHERE timeout_until > ? AND model_family = ?", (datetime.datetime.now(), model_family))
+        is_timed_out = cursor.fetchone() is not None
 
-        if not models_to_try:
-            print(f"All models for puzzle {puzzle_year}/{puzzle_day}/{puzzle_part} have been tried.")
-            continue
-
-        model_family, model_name = models_to_try[0]
+        if is_timed_out:
+            # If this model family is timed out, skip it for now
+            print(f"Model family {model_family} is currently timed out. Skipping.")
+            continue  # Go to the next iteration of the while loop
 
         for timeout in [10, 100, 1000]:
             previous_attempt_timed_out = timeout > 10
