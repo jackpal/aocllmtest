@@ -117,6 +117,7 @@ def run_program(puzzle_year: int, puzzle_day: int, puzzle_part: int, program: st
     assert(timeout > 0)
     input = aoc.input(puzzle_year, puzzle_day)
     result, answer = perform.run(program, input, [str(puzzle_part)], timeout)
+    answer = answer.strip()
     if result == 'error':
         print(f'computation failed: {answer}')
         return (result, answer)
