@@ -36,5 +36,11 @@ Follow instructions at <https://github.com/wimglenn/advent-of-code-data>
 ## Running the LLM tester
 
 ``` shell
-python db_manager.py --init
+caffeinate python experiment_runner.py
+```
+
+## Observing progress with a simple web browser
+
+``` shell
+python web_server.py
 ```
