@@ -44,3 +44,7 @@ caffeinate python experiment_runner.py
 ``` shell
 python web_server.py
 ```
+
+## Blog post about the process of writing this program
+
+[Using Gemini to write a LLM tester in Python](https://jackpal.github.io/2024/12/27/Writing_a_llm_testing_framework_with_Gemini.html)
