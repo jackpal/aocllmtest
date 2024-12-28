@@ -1,4 +1,5 @@
 from aocd.models import Puzzle
+from bs4 import BeautifulSoup
 
 def puzzle_solved(puzzle_year, puzzle_day, puzzle_part):
     puzzle = Puzzle(year=puzzle_year, day=puzzle_day)
@@ -10,7 +11,13 @@ def puzzle_solved(puzzle_year, puzzle_day, puzzle_part):
         raise Exception(f'Unknown part {puzzle_part}')
 
 def puzzle_prose(puzzle_year, puzzle_day, puzzle_part):
-    return Puzzle(year=puzzle_year, day=puzzle_day)._get_prose()
+    prose = BeautifulSoup(Puzzle(year=puzzle_year, day=puzzle_day)._get_prose())
+    articles = [article.text for article in prose.find_all('article', class_='day-desc')]
+    if not articles:
+        return prose.text
+    if puzzle_part == 1:
+        return articles[0]
+    return '\n'.join(articles)
 
 def input(puzzle_year, puzzle_day):
     return Puzzle(year=puzzle_year, day=puzzle_day).input_data
