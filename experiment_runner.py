@@ -6,15 +6,8 @@ from db_util import create_or_open_puzzle_db
 
 def get_next_puzzle_to_solve(cursor):
     """
-    Determines the next puzzle to solve based on the prioritization rules:
-    1. Descending years
-    2. Ascending days
-    3. Ascending parts
-    4. Ascending model families
-    5. Ascending models
-    Puzzles that have already been attempted are skipped.
+    Determines the next puzzle to solve based on the prioritization rules.
     """
-
     cursor.execute("""
         SELECT
             e.puzzle_year,
@@ -40,12 +33,14 @@ def get_next_puzzle_to_solve(cursor):
         latest_year, latest_day, latest_part = 2024, 0, 0  # Start from the end 2024, day 0, part 0
 
     cursor.execute("""
-        WITH RECURSIVE generate_series(value) AS (
-            SELECT 1
-            UNION ALL
-            SELECT value + 1
-            FROM generate_series
-            WHERE value < 25
+        WITH generate_series(value) AS (
+            SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL
+            SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL
+            SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12 UNION ALL
+            SELECT 13 UNION ALL SELECT 14 UNION ALL SELECT 15 UNION ALL SELECT 16 UNION ALL
+            SELECT 17 UNION ALL SELECT 18 UNION ALL SELECT 19 UNION ALL SELECT 20 UNION ALL
+            SELECT 21 UNION ALL SELECT 22 UNION ALL SELECT 23 UNION ALL SELECT 24 UNION ALL
+            SELECT 25
         )
         SELECT
             m.model_family, m.model_name, y.puzzle_year, d.puzzle_day, p.puzzle_part
@@ -61,8 +56,8 @@ def get_next_puzzle_to_solve(cursor):
         CROSS JOIN (
             SELECT DISTINCT puzzle_day FROM (
                 SELECT puzzle_day FROM Experiments
-                UNION
-                SELECT puzzle_day FROM generate_series
+                UNION ALL
+                SELECT value AS puzzle_day FROM generate_series
             )
         ) d
         CROSS JOIN (
