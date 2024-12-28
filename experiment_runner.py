@@ -110,7 +110,7 @@ def get_next_puzzle_to_solve(cursor):
             m.model_family ASC,
             m.model_name ASC
         LIMIT 1
-    """, (latest_year,))
+    """)
 
     next_puzzle = cursor.fetchone()
 
@@ -119,7 +119,7 @@ def get_next_puzzle_to_solve(cursor):
         return puzzle_year, puzzle_day, puzzle_part, model_family, model_name
     else:
         return None  # Indicates no more puzzles to solve
-
+    
 def run_experiment():
     """Runs the experiment, iterating through puzzles and models."""
     conn = create_or_open_puzzle_db()
