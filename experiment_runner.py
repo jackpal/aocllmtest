@@ -13,6 +13,7 @@ def get_next_puzzle_to_solve(cursor):
     4. Ascending model families
     5. Ascending models
     Puzzles that have already been attempted are skipped.
+    Day 25 Part 2 puzzles are skipped.
     """
 
     cursor.execute("""
@@ -101,6 +102,7 @@ def get_next_puzzle_to_solve(cursor):
             AND d.puzzle_day = e.puzzle_day
             AND p.puzzle_part = e.puzzle_part
         WHERE e.experiment_id IS NULL
+        AND NOT (d.puzzle_day = 25 AND p.puzzle_part = 2)
         ORDER BY
             y.puzzle_year DESC,
             d.puzzle_day ASC,
@@ -108,7 +110,7 @@ def get_next_puzzle_to_solve(cursor):
             m.model_family ASC,
             m.model_name ASC
         LIMIT 1
-    """)
+    """, (latest_year,))
 
     next_puzzle = cursor.fetchone()
 

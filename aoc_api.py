@@ -30,6 +30,8 @@ def models(model_family: str) -> List[str]:
 
 def puzzle_instructions(puzzle_year: int, puzzle_day: int, puzzle_part: int) -> Tuple[str, str | Tuple[int, int, int]]:
     """Returns the puzzle instructions."""
+    if puzzle_day == 25 and puzzle_part == 2:
+        return ('error', 'there is no puzzle day 25 part 2')
     if puzzle_part > 1:
         precursor_puzzle_part = puzzle_part-1
         if not aoc.puzzle_solved(puzzle_year, puzzle_day, precursor_puzzle_part):
@@ -55,7 +57,9 @@ def create_prompt(model_family: str, model_name: str, puzzle_year: int, puzzle_d
             - ('error', <error message>)
             - ('success', <prompt>)
     """
-        
+    if puzzle_day == 25 and puzzle_part == 2:
+        return ('error', 'there is no puzzle day 25 part 2')
+
     system_prompt = prompt.system_prompt()
     
     full_prompt = system_prompt + '\n\n' + puzzle_instructions + f'\n\nThe code you generate should only solve and print the answer for part {puzzle_part}\n'
@@ -81,6 +85,10 @@ def generate_program(model_family: str, model_name: str, full_prompt: str, puzzl
             - ('quota', <quota message>)
             - ('success', <generated program>)
     """
+
+    if puzzle_day == 25 and puzzle_part == 2:
+        return ('error', 'there is no puzzle day 25 part 2')
+
     assert(model_family == 'Gemini')
     try:
         result, text = gemini.generate(model_name, full_prompt)

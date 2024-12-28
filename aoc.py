@@ -30,6 +30,8 @@ def check_answer(puzzle_year, puzzle_day, puzzle_part, answer):
         puzzle.answer_a = answer
         return puzzle.answered_a
     elif puzzle_part == 2:
+        if puzzle_day == 25:
+            raise Exception("There's no part 2 for day 25.")
         if puzzle.answered_b:
             return puzzle.answer_b == answer
         if not puzzle.answered_a:
