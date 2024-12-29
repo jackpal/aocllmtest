@@ -145,26 +145,63 @@
         </tbody>
     </table>
     <div>
-        <h2>Delete Experiments</h2>
-        <form action="/delete" method="post">
-            <p>
-                <label for="experiment_id">Experiment ID:</label>
-                <input type="number" name="experiment_id" id="experiment_id">
-            </p>
-            <p>
-                <label for="model_family">Model Family:</label>
-                <input type="text" name="model_family" id="model_family">
-            </p>
-            <p>
-                <label for="model_name">Model Name:</label>
-                <input type="text" name="model_name" id="model_name">
-            </p>
-            <p>
-                <label for="year">Year:</label>
-                <input type="number" name="year" id="year">
-            </p>
-            <button type="submit">Delete</button>
-        </form>
+        <h2>Experiment Summary</h2>
+        {% for year, year_data in summary_data.items() %}
+            <h3>Year: {{ year }}</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th rowspan="2">Model Family</th>
+                        <th rowspan="2">Model</th>
+                        <th colspan="6">Part 1</th>
+                        <th colspan="6">Part 2</th>
+                    </tr>
+                    <tr>
+                        <th>Correct</th>
+                        <th>Incorrect</th>
+                        <th>Timed Out</th>
+                        <th>Error</th>
+                        <th>Not Attempted</th>
+                        <th>Total</th>
+                        <th>Correct</th>
+                        <th>Incorrect</th>
+                        <th>Timed Out</th>
+                        <th>Error</th>
+                        <th>Not Attempted</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for model_family, models_data in year_data.items() %}
+                        {% for model, parts_data in models_data.items() %}
+                            <tr>
+                                <td>{{ model_family }}</td>
+                                <td>{{ model }}</td>
+                                {% for part in ["Part 1", "Part 2"] %}
+                                    <td>{{ parts_data[part]['correct'] }} ({{ parts_data[part]['correct_pct']|round(1) }}%)</td>
+                                    <td>{{ parts_data[part]['incorrect'] }} ({{ parts_data[part]['incorrect_pct']|round(1) }}%)</td>
+                                    <td>{{ parts_data[part]['timed_out'] }} ({{ parts_data[part]['timed_out_pct']|round(1) }}%)</td>
+                                    <td>{{ parts_data[part]['error'] }} ({{ parts_data[part]['error_pct']|round(1) }}%)</td>
+                                    <td>{{ parts_data[part]['not_attempted'] }} ({{ parts_data[part]['not_attempted_pct']|round(1) }}%)</td>
+                                    <td>{{ parts_data[part]['total'] }}</td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    {% endfor %}
+                    <tr>
+                        <td colspan="2"><strong>Totals</strong></td>
+                        {% for part in ["Part 1", "Part 2"] %}
+                            <td>{{ totals[year][part]['correct'] }} ({{ totals[year][part]['correct_pct']|round(1) }}%)</td>
+                            <td>{{ totals[year][part]['incorrect'] }} ({{ totals[year][part]['incorrect_pct']|round(1) }}%)</td>
+                            <td>{{ totals[year][part]['timed_out'] }} ({{ totals[year][part]['timed_out_pct']|round(1) }}%)</td>
+                            <td>{{ totals[year][part]['error'] }} ({{ totals[year][part]['error_pct']|round(1) }}%)</td>
+                            <td>{{ totals[year][part]['not_attempted'] }} ({{ totals[year][part]['not_attempted_pct']|round(1) }}%)</td>
+                            <td>{{ totals[year][part]['total'] }}</td>
+                        {% endfor %}
+                    </tr>
+                </tbody>
+            </table>
+        {% endfor %}
     </div>
 </body>
 </html>
