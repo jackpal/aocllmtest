@@ -245,10 +245,9 @@ def run_experiment():
         cursor.execute("SELECT model_family FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
         timed_out_families = [row[0] for row in cursor.fetchall()]
 
+        # If all model families are timed out, find the one with the *earliest* timeout expiry
         all_families_timed_out = set(timed_out_families) == set(model_families())
-
         if all_families_timed_out:
-            # If all model families are timed out, find the one with the *earliest* timeout expiry
             cursor.execute("SELECT MIN(timeout_until) FROM QuotaTimeouts")
             next_available_time_str = cursor.fetchone()[0]
 
@@ -259,9 +258,9 @@ def run_experiment():
                 sleep_duration = max(0, (next_available_time - datetime.datetime.now()).total_seconds())
                 print(f"All model families are timed out. Sleeping for {sleep_duration:.0f} seconds (until {next_available_time}).")
                 time.sleep(sleep_duration)
-                continue  # Skip puzzle submission and go to the next iteration
             else:
                 print("Warning: No timeout information found, but all model families seem timed out. Retrying.")
+            continue  # Skip puzzle submission and go to the next iteration
 
         # Get the next puzzle to solve
         next_puzzle = get_next_puzzle_to_solve(cursor)
@@ -271,10 +270,10 @@ def run_experiment():
 
         puzzle_year, puzzle_day, puzzle_part, model_family, model_name = next_puzzle
 
+        # Check if the model_family for this puzzle is timed-out
         if model_family in timed_out_families:
-            # If this model family is timed out, skip it for now
             print(f"Model family {model_family} is currently timed out. Skipping.")
-            continue
+            continue  # Skip to the next puzzle
 
         # Run the experiment for the selected puzzle
         print(f"Attempting puzzle {puzzle_year}/{puzzle_day}/{puzzle_part} with model {model_family}/{model_name}")
