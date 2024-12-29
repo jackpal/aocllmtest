@@ -14,6 +14,134 @@ def get_next_puzzle_to_solve(cursor):
     5. Ascending models
     Puzzles that have already been attempted are skipped.
     Day 25 Part 2 puzzles are skipped.
+    For a given model, don't try to solve part 2 of a puzzle if the given model
+    has not been able to correctly answer part 1 of the puzzle.
+    """
+
+    cursor.execute("""
+        SELECT
+            e.puzzle_year,
+            e.puzzle_day,
+            e.puzzle_part,
+            e.model_family,
+            e.model_name
+        FROM
+            Experiments e
+        WHERE
+            e.answer_is_correct = 1
+        ORDER BY
+            e.puzzle_year DESC,
+            e.puzzle_day DESC,
+            e.puzzle_part DESC
+        LIMIT 1
+    """)
+    latest_solved = cursor.fetchone()
+
+    if latest_solved:
+        latest_year, latest_day, latest_part, _, _ = latest_solved
+    else:
+        latest_year, latest_day, latest_part = 2024, 0, 0
+
+    query = """
+        WITH generate_series(value) AS (
+            SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL
+            SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL
+            SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12 UNION ALL
+            SELECT 13 UNION ALL SELECT 14 UNION ALL SELECT 15 UNION ALL SELECT 16 UNION ALL
+            SELECT 17 UNION ALL SELECT 18 UNION ALL SELECT 19 UNION ALL SELECT 20 UNION ALL
+            SELECT 21 UNION ALL SELECT 22 UNION ALL SELECT 23 UNION ALL SELECT 24 UNION ALL
+            SELECT 25
+        )
+        SELECT
+            m.model_family, m.model_name, y.puzzle_year, d.puzzle_day, p.puzzle_part
+        FROM
+            Models m
+        CROSS JOIN (
+            SELECT DISTINCT puzzle_year FROM (
+                SELECT puzzle_year FROM Experiments
+                UNION ALL
+                SELECT 2015 AS puzzle_year
+                UNION ALL
+                SELECT 2016 AS puzzle_year
+                UNION ALL
+                SELECT 2017 AS puzzle_year
+                UNION ALL
+                SELECT 2018 AS puzzle_year
+                UNION ALL
+                SELECT 2019 AS puzzle_year
+                UNION ALL
+                SELECT 2020 AS puzzle_year
+                UNION ALL
+                SELECT 2021 AS puzzle_year
+                UNION ALL
+                SELECT 2022 AS puzzle_year
+                UNION ALL
+                SELECT 2023 AS puzzle_year
+                UNION ALL
+                SELECT 2024 AS puzzle_year
+            )
+        ) y
+        CROSS JOIN (
+            SELECT DISTINCT puzzle_day FROM (
+                SELECT puzzle_day FROM Experiments
+                UNION ALL
+                SELECT value AS puzzle_day FROM generate_series
+            )
+        ) d
+        CROSS JOIN (
+            SELECT DISTINCT puzzle_part FROM (
+                SELECT puzzle_part FROM Experiments
+                UNION
+                SELECT 1 AS puzzle_part
+                UNION
+                SELECT 2 AS puzzle_part
+            )
+        ) p
+        LEFT JOIN
+            Experiments e ON m.model_family = e.model_family
+            AND m.model_name = e.model_name
+            AND y.puzzle_year = e.puzzle_year
+            AND d.puzzle_day = e.puzzle_day
+            AND p.puzzle_part = e.puzzle_part
+        LEFT JOIN
+            Experiments e1 ON m.model_family = e1.model_family
+            AND m.model_name = e1.model_name
+            AND y.puzzle_year = e1.puzzle_year
+            AND d.puzzle_day = e1.puzzle_day
+            AND e1.puzzle_part = 1
+        LEFT JOIN
+            QuotaTimeouts q ON m.model_family = q.model_family
+        WHERE e.experiment_id IS NULL
+        AND NOT (d.puzzle_day = 25 AND p.puzzle_part = 2)
+        AND (p.puzzle_part = 1 OR e1.answer_is_correct = 1)
+        AND (q.timeout_until IS NULL OR q.timeout_until < datetime('now'))
+        ORDER BY
+            y.puzzle_year DESC,
+            d.puzzle_day ASC,
+            p.puzzle_part ASC,
+            m.model_family ASC,
+            m.model_name ASC
+        LIMIT 1
+    """
+
+    cursor.execute(query)
+
+    next_puzzle = cursor.fetchone()
+
+    if next_puzzle:
+        model_family, model_name, puzzle_year, puzzle_day, puzzle_part = next_puzzle
+        return puzzle_year, puzzle_day, puzzle_part, model_family, model_name
+    else:
+        return None  # Indicates no more puzzles to solve
+    """
+    Determines the next puzzle to solve based on the prioritization rules:
+    1. Descending years
+    2. Ascending days
+    3. Ascending parts
+    4. Ascending model families
+    5. Ascending models
+    Puzzles that have already been attempted are skipped.
+    Day 25 Part 2 puzzles are skipped.
     For a given model, don't try to solve part 2 of a puzzle if the given model 
     has not been able to correctly answer part 1 of the puzzle.
     """
@@ -269,11 +397,6 @@ def run_experiment():
             break  # Exit the loop if no more puzzles
 
         puzzle_year, puzzle_day, puzzle_part, model_family, model_name = next_puzzle
-
-        # Check if the model_family for this puzzle is timed-out
-        if model_family in timed_out_families:
-            print(f"Model family {model_family} is currently timed out. Skipping.")
-            continue  # Skip to the next puzzle
 
         # Run the experiment for the selected puzzle
         print(f"Attempting puzzle {puzzle_year}/{puzzle_day}/{puzzle_part} with model {model_family}/{model_name}")

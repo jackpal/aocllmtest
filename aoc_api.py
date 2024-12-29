@@ -93,18 +93,7 @@ def generate_program(model_family: str, model_name: str, full_prompt: str, puzzl
         return ('error', 'there is no puzzle day 25 part 2')
 
     if model_family == 'Gemini':
-        try:
-            result, text = gemini_driver.generate(model_name, full_prompt)
-            if result == 'success':
-                return ('success', text)
-            else:
-                return ('error', 'No program found. Text: {text}')
-        except Exception as e:
-            exception_str = str(e)
-            if "429" in exception_str:
-                # Assume it's a quota issue.
-                return ('quota', exception_str)
-            return ('error', exception_str)
+        return gemini_driver.generate(model_name, full_prompt)
     elif model_family == 'ollama':
         return ollama_driver.generate(model_name, full_prompt)
     else:
