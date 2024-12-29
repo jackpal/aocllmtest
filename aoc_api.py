@@ -1,7 +1,8 @@
 import aoc
-import gemini
+import gemini_driver
 import perform
 import prompt
+import ollama_driver
 from typing import List, Tuple, Union
 
 def model_families() -> List[str]:
@@ -11,7 +12,7 @@ def model_families() -> List[str]:
     Returns:
         List[str]: A list of model family names.
     """
-    return ["Gemini"]  
+    return ["Gemini", "ollama"]  
 
 def models(model_family: str) -> List[str]:
     """
@@ -25,6 +26,8 @@ def models(model_family: str) -> List[str]:
     """
     if model_family == "Gemini":
         return ['gemini-exp-1206', 'gemini-2.0-flash-exp', 'gemini-2.0-flash-thinking-exp-1219']
+    elif model_family == "ollama":
+        return ["gemma:7b"]
     else:
         return []
 
@@ -89,19 +92,23 @@ def generate_program(model_family: str, model_name: str, full_prompt: str, puzzl
     if puzzle_day == 25 and puzzle_part == 2:
         return ('error', 'there is no puzzle day 25 part 2')
 
-    assert(model_family == 'Gemini')
-    try:
-        result, text = gemini.generate(model_name, full_prompt)
-        if result == 'success':
-            return ('success', text)
-        else:
-            return ('error', 'No program found. Text: {text}')
-    except Exception as e:
-        exception_str = str(e)
-        if "429" in exception_str:
-            # Assume it's a quota issue.
-            return ('quota', exception_str)
-        return ('error', exception_str)
+    if model_family == 'Gemini':
+        try:
+            result, text = gemini_driver.generate(model_name, full_prompt)
+            if result == 'success':
+                return ('success', text)
+            else:
+                return ('error', 'No program found. Text: {text}')
+        except Exception as e:
+            exception_str = str(e)
+            if "429" in exception_str:
+                # Assume it's a quota issue.
+                return ('quota', exception_str)
+            return ('error', exception_str)
+    elif model_family == 'ollama':
+        return ollama_driver.generate(model_name, full_prompt)
+    else:
+        raise Exception(f'Unknown model family {model_family}')
 
 def run_program(puzzle_year: int, puzzle_day: int, puzzle_part: int, program: str, timeout: int) -> Tuple[str, Union[str, int]]:
     """Tests the program in a safe environment.

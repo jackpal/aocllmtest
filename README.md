@@ -33,6 +33,13 @@ Follow instructions at <https://github.com/wimglenn/advent-of-code-data>
 >>> exit
 ```
 
+## If you're running ollama, to do local testing start the ollama server.
+
+``` shell
+caffeinate ollama serve
+```
+
+
 ## Running the LLM tester
 
 ``` shell
