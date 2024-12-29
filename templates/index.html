@@ -23,6 +23,10 @@
             padding: 10px;
             border: 1px solid #ccc;
         }
+        .highlight-correct {
+            background-color: lightgreen;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -172,13 +176,27 @@
                     </tr>
                 </thead>
                 <tbody>
+                    {% set max_correct_part1 = namespace(value=0) %}
+                    {% set max_correct_part2 = namespace(value=0) %}
+                    {% for model_family, models_data in year_data.items() %}
+                        {% for model, parts_data in models_data.items() %}
+                            {% if parts_data['Part 1']['correct_pct'] > max_correct_part1.value %}
+                                {% set max_correct_part1.value = parts_data['Part 1']['correct_pct'] %}
+                            {% endif %}
+                            {% if parts_data['Part 2']['correct_pct'] > max_correct_part2.value %}
+                                {% set max_correct_part2.value = parts_data['Part 2']['correct_pct'] %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
                     {% for model_family, models_data in year_data.items() %}
                         {% for model, parts_data in models_data.items() %}
                             <tr>
                                 <td>{{ model_family }}</td>
                                 <td>{{ model }}</td>
                                 {% for part in ["Part 1", "Part 2"] %}
-                                    <td>{{ parts_data[part]['correct'] }} ({{ parts_data[part]['correct_pct']|round(1) }}%)</td>
+                                    <td {% if parts_data[part]['correct_pct'] == max_correct_part1.value and part == 'Part 1' %}class="highlight-correct"{% elif parts_data[part]['correct_pct'] == max_correct_part2.value and part == 'Part 2' %}class="highlight-correct"{% endif %}>
+                                        {{ parts_data[part]['correct'] }} ({{ parts_data[part]['correct_pct']|round(1) }}%)
+                                    </td>
                                     <td>{{ parts_data[part]['incorrect'] }} ({{ parts_data[part]['incorrect_pct']|round(1) }}%)</td>
                                     <td>{{ parts_data[part]['timed_out'] }} ({{ parts_data[part]['timed_out_pct']|round(1) }}%)</td>
                                     <td>{{ parts_data[part]['error'] }} ({{ parts_data[part]['error_pct']|round(1) }}%)</td>
@@ -191,7 +209,9 @@
                     <tr>
                         <td colspan="2"><strong>Totals</strong></td>
                         {% for part in ["Part 1", "Part 2"] %}
-                            <td>{{ totals[year][part]['correct'] }} ({{ totals[year][part]['correct_pct']|round(1) }}%)</td>
+                            <td>
+                                {{ totals[year][part]['correct'] }} ({{ totals[year][part]['correct_pct']|round(1) }}%)
+                            </td>
                             <td>{{ totals[year][part]['incorrect'] }} ({{ totals[year][part]['incorrect_pct']|round(1) }}%)</td>
                             <td>{{ totals[year][part]['timed_out'] }} ({{ totals[year][part]['timed_out_pct']|round(1) }}%)</td>
                             <td>{{ totals[year][part]['error'] }} ({{ totals[year][part]['error_pct']|round(1) }}%)</td>
