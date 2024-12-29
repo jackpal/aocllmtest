@@ -208,7 +208,7 @@ def run_experiment_for_puzzle(puzzle_year, puzzle_day, puzzle_part, model_family
                 WHERE model_family = ? AND model_name = ? AND puzzle_year = ? AND puzzle_day = ? AND puzzle_part = ?
             """, (run_result[1], datetime.datetime.now(), model_family, model_name, puzzle_year, puzzle_day, puzzle_part))
             conn.commit()
-            continue
+            break # Move on to the next model after an error
         elif run_result[0] == 'timeout':
             print(f"Program timed out after {run_result[1]} seconds")
             cursor.execute("""
