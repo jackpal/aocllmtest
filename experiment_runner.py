@@ -14,6 +14,8 @@ def get_next_puzzle_to_solve(cursor):
     5. Ascending models
     Puzzles that have already been attempted are skipped.
     Day 25 Part 2 puzzles are skipped.
+    For a given model, don't try to solve part 2 of a puzzle if the given model 
+    has not been able to correctly answer part 1 of the puzzle.
     """
 
     cursor.execute("""
@@ -101,8 +103,15 @@ def get_next_puzzle_to_solve(cursor):
             AND y.puzzle_year = e.puzzle_year
             AND d.puzzle_day = e.puzzle_day
             AND p.puzzle_part = e.puzzle_part
+        LEFT JOIN
+            Experiments e1 ON m.model_family = e1.model_family
+            AND m.model_name = e1.model_name
+            AND y.puzzle_year = e1.puzzle_year
+            AND d.puzzle_day = e1.puzzle_day
+            AND e1.puzzle_part = 1
         WHERE e.experiment_id IS NULL
         AND NOT (d.puzzle_day = 25 AND p.puzzle_part = 2)
+        AND (p.puzzle_part = 1 OR e1.answer_is_correct = 1)
         ORDER BY
             y.puzzle_year DESC,
             d.puzzle_day ASC,
