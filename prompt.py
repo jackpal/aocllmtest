@@ -29,6 +29,8 @@ Pay attention to whitespace in the input. You may need to use "strip()" to remov
 
 If the problem is a graph or network problem, use the networkx library to solve it.
 
+You can use numpy if you want.
+
 Use subroutines, lambdas, list comprehensions and logical boolean operators where it will make the code shorter.
 
 Use short function names and short variable names.

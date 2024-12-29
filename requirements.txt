@@ -5,4 +5,5 @@ google-generativeai
 jupyter
 keyring
 networkx
+numpy
 ollama
