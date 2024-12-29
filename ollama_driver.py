@@ -12,7 +12,6 @@ def generate(model_name : str, prompt: str) -> Tuple[str, str]:
 
     text = response.message.content
     result = markdown_util.extract_solve_function(text)
-    print(result)
     if result:
         return ('success', result)
     return ('failure', text)
