@@ -183,7 +183,7 @@ def run_experiment_for_puzzle(puzzle_year, puzzle_day, puzzle_part, model_family
 
         # Insert experiment record *after* successful program generation
         cursor.execute("""
-            INSERT INTO Experiments (
+            INSERT OR IGNORE INTO Experiments (
                 model_family, model_name, puzzle_year, puzzle_day, puzzle_part,
                 prompt, program, experiment_started_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
