@@ -7,6 +7,10 @@ from db_util import create_or_open_puzzle_db
 def get_next_puzzle_to_solve(cursor, timed_out_families):
     """
     Determines the next puzzle to solve based on the prioritization rules.
+    Returns a tuple: (next_puzzle, more_puzzles_available)
+      - next_puzzle: A tuple representing the next puzzle to solve, or None if no puzzles are available.
+      - more_puzzles_available: A boolean indicating if there are more puzzles to solve, even if
+        they are currently blocked by timeouts.
     """
     cursor.execute("""
         SELECT
@@ -126,12 +130,97 @@ def get_next_puzzle_to_solve(cursor, timed_out_families):
 
     next_puzzle = cursor.fetchone()
 
+    # Check if there are any more puzzles left to solve, even if some are blocked by timeouts
+    cursor.execute(f"""
+        WITH generate_series(value) AS (
+            SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL
+            SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL
+            SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12 UNION ALL
+            SELECT 13 UNION ALL SELECT 14 UNION ALL SELECT 15 UNION ALL SELECT 16 UNION ALL
+            SELECT 17 UNION ALL SELECT 18 UNION ALL SELECT 19 UNION ALL SELECT 20 UNION ALL
+            SELECT 21 UNION ALL SELECT 22 UNION ALL SELECT 23 UNION ALL SELECT 24 UNION ALL
+            SELECT 25
+        ), ValidExperiments AS (
+            SELECT DISTINCT
+                e.puzzle_year,
+                e.puzzle_day,
+                e.model_family,
+                e.model_name
+            FROM
+                Experiments e
+            WHERE
+                e.puzzle_part = 1 AND e.answer_is_correct = 1
+        )
+        SELECT 1
+        FROM
+            Models m
+        CROSS JOIN (
+            SELECT DISTINCT puzzle_year FROM (
+                SELECT puzzle_year FROM Experiments
+                UNION ALL
+                SELECT 2015 AS puzzle_year
+                UNION ALL
+                SELECT 2016 AS puzzle_year
+                UNION ALL
+                SELECT 2017 AS puzzle_year
+                UNION ALL
+                SELECT 2018 AS puzzle_year
+                UNION ALL
+                SELECT 2019 AS puzzle_year
+                UNION ALL
+                SELECT 2020 AS puzzle_year
+                UNION ALL
+                SELECT 2021 AS puzzle_year
+                UNION ALL
+                SELECT 2022 AS puzzle_year
+                UNION ALL
+                SELECT 2023 AS puzzle_year
+                UNION ALL
+                SELECT 2024 AS puzzle_year
+            )
+        ) y
+        CROSS JOIN (
+            SELECT DISTINCT puzzle_day FROM (
+                SELECT puzzle_day FROM Experiments
+                UNION ALL
+                SELECT value AS puzzle_day FROM generate_series
+            )
+        ) d
+        CROSS JOIN (
+            SELECT DISTINCT puzzle_part FROM (
+                SELECT puzzle_part FROM Experiments
+                UNION
+                SELECT 1 AS puzzle_part
+                UNION
+                SELECT 2 AS puzzle_part
+            )
+        ) p
+        LEFT JOIN
+            Experiments e ON m.model_family = e.model_family
+            AND m.model_name = e.model_name
+            AND y.puzzle_year = e.puzzle_year
+            AND d.puzzle_day = e.puzzle_day
+            AND p.puzzle_part = e.puzzle_part
+        WHERE e.experiment_id IS NULL
+        AND NOT (d.puzzle_day = 25 AND p.puzzle_part = 2)
+        AND (p.puzzle_part = 1 OR EXISTS (
+            SELECT 1
+            FROM ValidExperiments ve
+            WHERE ve.model_family = m.model_family
+            AND ve.model_name = m.model_name
+            AND ve.puzzle_year = y.puzzle_year
+            AND ve.puzzle_day = d.puzzle_day
+        ))
+        LIMIT 1
+    """)
+    more_puzzles_available = cursor.fetchone() is not None
+
     if next_puzzle:
         model_family, model_name, puzzle_year, puzzle_day, puzzle_part = next_puzzle
-        return puzzle_year, puzzle_day, puzzle_part, model_family, model_name
+        return (puzzle_year, puzzle_day, puzzle_part, model_family, model_name), more_puzzles_available
     else:
-        return None  # Indicates no more puzzles to solve
-
+        return None, more_puzzles_available  # Indicates no more puzzles to solve right now
+    
 def run_experiment_for_puzzle(puzzle_year, puzzle_day, puzzle_part, model_family, model_name):
     """Runs the experiment for a single puzzle."""
     conn = create_or_open_puzzle_db()
@@ -238,28 +327,31 @@ def run_experiment():
         cursor.execute("SELECT model_family FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
         timed_out_families = [row[0] for row in cursor.fetchall()]
 
-        # If all model families are timed out, find the one with the *earliest* timeout expiry
-        all_families_timed_out = set(timed_out_families) == set(model_families())
-        if all_families_timed_out:
-            cursor.execute("SELECT MIN(timeout_until) FROM QuotaTimeouts")
-            next_available_time_str = cursor.fetchone()[0]
-
-            if next_available_time_str is not None:
-                # Convert the string to a datetime object
-                next_available_time = datetime.datetime.fromisoformat(next_available_time_str)
-
-                sleep_duration = max(0, (next_available_time - datetime.datetime.now()).total_seconds())
-                print(f"All model families are timed out. Sleeping for {sleep_duration:.0f} seconds (until {next_available_time}).")
-                time.sleep(sleep_duration)
-            else:
-                print("Warning: No timeout information found, but all model families seem timed out. Retrying.")
-            continue  # Skip puzzle submission and go to the next iteration
-
         # Get the next puzzle to solve
-        next_puzzle = get_next_puzzle_to_solve(cursor, timed_out_families)
+        next_puzzle, more_puzzles_available = get_next_puzzle_to_solve(cursor, timed_out_families)
+
         if next_puzzle is None:
-            print("All puzzles have been attempted.")
-            break  # Exit the loop if no more puzzles
+            if not more_puzzles_available:
+                print("All puzzles have been attempted.")
+                break  # Exit the loop if no more puzzles
+            else:
+                # Find the earliest timeout expiry among timed-out families.
+                cursor.execute("SELECT MIN(timeout_until) FROM QuotaTimeouts")
+                next_available_time_str = cursor.fetchone()[0]
+
+                if next_available_time_str is not None:
+                    # Convert the string to a datetime object.
+                    next_available_time = datetime.datetime.fromisoformat(next_available_time_str)
+
+                    # Calculate sleep duration based on the earliest timeout.
+                    sleep_duration = max(0, (next_available_time - datetime.datetime.now()).total_seconds())
+                    print(f"All model families are timed out. Sleeping for {sleep_duration:.0f} seconds (until {next_available_time}).")
+                    time.sleep(sleep_duration)
+                    continue
+                else:
+                    print("Warning: Could not determine the next available time. Retrying after a short delay.")
+                    time.sleep(60)
+                    continue
 
         puzzle_year, puzzle_day, puzzle_part, model_family, model_name = next_puzzle
 
