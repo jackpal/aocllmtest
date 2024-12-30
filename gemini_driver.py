@@ -1,7 +1,10 @@
 import google.generativeai as genai
 import keyring
 import markdown_util
-from typing import Tuple
+from typing import List, Tuple
+
+def models() -> List[str]:
+    return ['gemini-exp-1206', 'gemini-2.0-flash-exp', 'gemini-2.0-flash-thinking-exp-1219']
 
 _configured = False
 _model_dict = dict()
@@ -31,3 +34,6 @@ def generate(model_name : str, prompt: str) -> Tuple[str, str]:
     return ('failure', text)
 
 
+if __name__ == "__main__":
+    for model in models():
+        print(model, generate(model, 'what Gemini model are you?'))

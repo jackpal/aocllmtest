@@ -25,7 +25,7 @@ def models(model_family: str) -> List[str]:
         List[str]: A list of model names within the specified family.
     """
     if model_family == "Gemini":
-        return ['gemini-exp-1206', 'gemini-2.0-flash-exp', 'gemini-2.0-flash-thinking-exp-1219']
+        return gemini_driver.models()
     elif model_family == "ollama":
         return ["llama3.3", "qwen2.5-coder:32b"]
     else:
