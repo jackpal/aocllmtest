@@ -27,7 +27,11 @@ def generate(model_name : str, prompt: str) -> Tuple[str, str]:
             return ('quota', exception_str)
         else:
             return ('error', exception_str)
-    text = response.text
+    try:
+        text = response.text
+    except Exception as e:
+        exception_str = str(e)
+        return ('error', 'response.text ' + exception_str)
     result = markdown_util.extract_solve_function(text)
     if result:
         return ('success', result)
