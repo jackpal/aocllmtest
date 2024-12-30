@@ -149,29 +149,6 @@
         </tbody>
     </table>
     <div>
-        <h2>Tests Remaining (by Model)</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Model Family</th>
-                    <th>Model</th>
-                    <th>Percentage Remaining</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for model_family, models in remaining_percentages.items() %}
-                    {% for model, percentage in models.items() %}
-                        <tr>
-                            <td>{{ model_family }}</td>
-                            <td>{{ model }}</td>
-                            <td>{{ percentage|round(1) }}%</td>
-                        </tr>
-                    {% endfor %}
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <div>
         <h2>Experiment Summary</h2>
         {% for year, year_data in summary_data.items() %}
             <h3>Year: {{ year }}</h3>
@@ -199,9 +176,9 @@
                     </tr>
                 </thead>
                 <tbody>
+                    {% set max_correct_part1 = namespace(value=0) %}
+                    {% set max_correct_part2 = namespace(value=0) %}
                     {% for model_family, models_data in year_data.items() %}
-                        {% set max_correct_part1 = namespace(value=0) %}
-                        {% set max_correct_part2 = namespace(value=0) %}
                         {% for model, parts_data in models_data.items() %}
                             {% if parts_data['Part 1']['correct_pct'] > max_correct_part1.value %}
                                 {% set max_correct_part1.value = parts_data['Part 1']['correct_pct'] %}
@@ -210,12 +187,14 @@
                                 {% set max_correct_part2.value = parts_data['Part 2']['correct_pct'] %}
                             {% endif %}
                         {% endfor %}
+                    {% endfor %}
+                    {% for model_family, models_data in year_data.items() %}
                         {% for model, parts_data in models_data.items() %}
                             <tr>
                                 <td>{{ model_family }}</td>
                                 <td>{{ model }}</td>
                                 {% for part in ["Part 1", "Part 2"] %}
-                                    <td {% if parts_data[part]['correct_pct'] == max_correct_part1.value and part == 'Part 1' %}class="highlight-correct"{% elif parts_data[part]['correct_pct'] == max_correct_part2.value and part == 'Part 2' %}class="highlight-correct"{% endif %}>
+                                    <td {% if parts_data[part]['correct_pct'] == max_correct_part1.value and part == 'Part 1' and max_correct_part1.value > 0 %}class="highlight-correct"{% elif parts_data[part]['correct_pct'] == max_correct_part2.value and part == 'Part 2' and max_correct_part2.value > 0 %}class="highlight-correct"{% endif %}>
                                         {{ parts_data[part]['correct'] }} ({{ parts_data[part]['correct_pct']|round(1) }}%)
                                     </td>
                                     <td>{{ parts_data[part]['incorrect'] }} ({{ parts_data[part]['incorrect_pct']|round(1) }}%)</td>
@@ -227,20 +206,10 @@
                             </tr>
                         {% endfor %}
                     {% endfor %}
-                    {% set max_correct_part1 = namespace(value=0) %}
-                    {% set max_correct_part2 = namespace(value=0) %}
-                    {% for part in ["Part 1", "Part 2"] %}
-                        {% if totals[year][part]['correct_pct'] > max_correct_part1.value and part == "Part 1" %}
-                            {% set max_correct_part1.value = totals[year][part]['correct_pct'] %}
-                        {% endif %}
-                        {% if totals[year][part]['correct_pct'] > max_correct_part2.value and part == "Part 2" %}
-                            {% set max_correct_part2.value = totals[year][part]['correct_pct'] %}
-                        {% endif %}
-                    {% endfor %}
                     <tr>
                         <td colspan="2"><strong>Totals</strong></td>
                         {% for part in ["Part 1", "Part 2"] %}
-                            <td {% if totals[year][part]['correct_pct'] == max_correct_part1.value and part == 'Part 1' %}class="highlight-correct"{% elif totals[year][part]['correct_pct'] == max_correct_part2.value and part == 'Part 2' %}class="highlight-correct"{% endif %}>
+                            <td>
                                 {{ totals[year][part]['correct'] }} ({{ totals[year][part]['correct_pct']|round(1) }}%)
                             </td>
                             <td>{{ totals[year][part]['incorrect'] }} ({{ totals[year][part]['incorrect_pct']|round(1) }}%)</td>
