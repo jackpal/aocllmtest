@@ -16,14 +16,7 @@ def extract_solve_function(markdown_text: str) -> str | None:
     The contents of the last Python code block, 
     or the whole input if no code blocks are found.
   """
-  
-  # Heuristic for slightly incorrect code block markdown.
-  def replace_func(match):
-        return "\n```" + match.group(1)
-
-  # Use a single regular expression to find and replace
-  markdown_text = re.sub(r"```(\s*)$", replace_func, markdown_text)
-  
+    
   md_html = markdown.markdown(markdown_text, extensions=['fenced_code'])
   soup = BeautifulSoup(md_html,features="html.parser")
   code_blocks = soup.find_all('code', {'class':'language-python'})
@@ -36,63 +29,79 @@ def extract_solve_function(markdown_text: str) -> str | None:
       return markdown_text
     return last_code_block_text
 
+  # Heuristic for slightly incorrect code block markdown.
+  pattern = r"```python\n(.*?)\n?```"  # Regex to find Python code blocks
+  matches = re.findall(pattern, markdown_text, re.DOTALL)
+  if matches:
+    return matches[-1]
+  
+  # Give up, return original text.
   return markdown_text
 
 if __name__ == "__main__":
   print(extract_solve_function("""```python
 import sys
-from itertools import combinations
+from collections import defaultdict
 
-weapons = {
-    'Dagger': (8, 4, 0),
-    'Shortsword': (10, 5, 0),
-    'Warhammer': (25, 6, 0),
-    'Longsword': (40, 7, 0),
-    'Greataxe': (74, 8, 0)
-}
+def is_safe(state):
+    for f in range(4):
+        if state[f]['G']:
+            for m in state[f]['M']:
+                if m != state[f]['G'][0]:  
+                    return False
+    return True
 
-armor = {
-    'None': (0, 0, 0),
-    'Leather': (13, 0, 1),
-    'Chainmail': (31, 0, 2),
-    'Splintmail': (53, 0, 3),
-    'Bandedmail': (75, 0, 4),
-    'Platemail': (102, 0, 5)
-}
+def hash_state(state):
+    return tuple((tuple(sorted(items)),) for items in [state[f]['M'], state[f]['G']] for f in range(4)])
 
-rings = {
-    'None1': (0, 0, 0),
-    'None2': (0, 0, 0),
-    'Damage +1': (25, 1, 0),
-    'Damage +2': (50, 2, 0),
-    'Damage +3': (100, 3, 0),
-    'Defense +1': (20, 0, 1),
-    'Defense +2': (40, 0, 2),
-    'Defense +3': (80, 0, 3)
-}
+def solve():
+    lines = sys.stdin.readlines()
+    floors = defaultdict(lambda: {'M': [], 'G': []})
+    for i, line in enumerate(lines):
+        if 'a' in line:
+            floors[i // 3]['G'].append('H')
+        elif 'b' in line:
+            floors[i // 3]['G'].append('L')
 
-def fight(player_hp, player_damage, player_armor, boss_hp, boss_damage, boss_armor):
-  while True:
-    boss_hp -= max(1, player_damage - boss_armor)
-    if boss_hp <= 0:
-      return 'Player'
-    player_hp -= max(1, boss_damage - player_armor)
-    if player_hp <= 0:
-      return 'Boss'
+    for i, line in enumerate(lines):
+        for c in line.strip():
+            if c.isupper() and c != 'E':
+                floors[i // 3]['M'].append(c)
 
-def min_cost(boss_stats):
-  min_gold = float('inf')
-  for w in weapons.values():
-    for a in armor.values():
-      for r1, r2 in combinations(rings.values(), 2):
-        player_damage = w[1] + r1[1] + r2[1]
-        player_armor = w[2] + a[2] + r1[2] + r2[2]
+    queue = [(floors, 0)]
+    visited = set([hash_state(floors)])
 
-        cost = w[0] + a[0] + r1[0] + r2[0]
+    while queue:
+        state, steps = queue.pop(0)
+        if all(item for floor in state.values() for item in floor.values()):
+            return steps
 
-        if fight(100, player_damage, player_armor, *boss_stats) == 'Player':
-          min_gold = min(min_gold, cost)
-  return min_gold
+        for f in range(4):
+            if 'E' in floors[f]:
+                current_floor = f
+                break
 
-boss_stats = [int(x.strip()) for x in sys.stdin.read().split(':')[1].split('\n')]
-print(min_cost(boss_stats))```"""))
+        for mf in range(max(0, current_floor - 1), min(3, current_floor + 1) + 1):
+            for item_type in ['M', 'G']:
+                items = state[current_floor][item_type]
+                for item in items:
+
+                    new_state = [dict(floor) for floor in state]
+                    new_state[mf][item_type].append(item)
+                    new_state[current_floor][item_type].remove(item)
+
+                    if is_safe(new_state):
+
+                        hashed_state = hash_state(new_state)
+
+                        if hashed_state not in visited:
+                            queue.append((new_state, steps + 1))
+                            visited.add(hashed_state)
+
+    return -1
+
+print(solve())```
+
+
+
+"""))
