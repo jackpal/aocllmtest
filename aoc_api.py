@@ -27,7 +27,7 @@ def models(model_family: str) -> List[str]:
     if model_family == "Gemini":
         return ['gemini-exp-1206', 'gemini-2.0-flash-exp', 'gemini-2.0-flash-thinking-exp-1219']
     elif model_family == "ollama":
-        return ["llama3.3"]
+        return ["llama3.3", "qwen2.5-coder:32b"]
     else:
         return []
 
