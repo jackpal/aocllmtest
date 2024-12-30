@@ -23,7 +23,7 @@ def extract_solve_function(markdown_text: str) -> str | None:
   if code_blocks:
     last_code_block = code_blocks[-1]
     last_code_block_text = last_code_block.text
-    if "'''python" in last_code_block_text:
+    if "```python" in last_code_block_text:
       # Parsing failed, return original text.
       return markdown_text
     return last_code_block_text
