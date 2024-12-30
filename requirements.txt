@@ -4,6 +4,7 @@ Flask
 google-generativeai
 jupyter
 keyring
+markdown
 networkx
 numpy
 ollama
