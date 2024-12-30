@@ -13,15 +13,13 @@ def models() -> List[str]:
         'gemini-1.5-flash-8b',
         ]
 
-_configured = False
-_model_dict = dict()
+genai.configure(api_key=keyring.get_password("aocllm", "google-ai-studio"))
+
+_model_dict = dict()    
 
 def generate(model_name : str, prompt: str) -> Tuple[str, str]:
     global _configured
     global _model_dict
-    if not _configured:
-        genai.configure(api_key=keyring.get_password("aocllm", "google-ai-studio"))
-        _configured = True
     if model_name not in _model_dict:
         _model_dict[model_name] = genai.GenerativeModel(model_name)
     model = _model_dict[model_name]
@@ -55,5 +53,8 @@ def model_quota_timeout(model_name: str) -> int:
         return max(24*3600/1500, 60/10)
 
 if __name__ == "__main__":
-    for model in models():
-        print(model, generate(model, 'what Gemini model are you?'))
+    for m in genai.list_models():
+        if "generateContent" in m.supported_generation_methods:
+            print(m)
+    # for model in models():
+    #     print(model, generate(model, 'what Gemini model are you?'))
