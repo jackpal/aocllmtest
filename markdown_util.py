@@ -1,5 +1,6 @@
 import markdown
 from bs4 import BeautifulSoup
+import re
 
 def extract_solve_function(markdown_text: str) -> str | None:
   """
@@ -15,6 +16,13 @@ def extract_solve_function(markdown_text: str) -> str | None:
     The contents of the last Python code block, 
     or the whole input if no code blocks are found.
   """
+  
+  # Heuristic for slightly incorrect code block markdown.
+  def replace_func(match):
+        return "\n```" + match.group(1)
+
+  # Use a single regular expression to find and replace
+  markdown_text = re.sub(r"```(\s*)$", replace_func, markdown_text)
   
   md_html = markdown.markdown(markdown_text, extensions=['fenced_code'])
   soup = BeautifulSoup(md_html,features="html.parser")
@@ -33,46 +41,58 @@ def extract_solve_function(markdown_text: str) -> str | None:
 if __name__ == "__main__":
   print(extract_solve_function("""```python
 import sys
+from itertools import combinations
 
-def p(s, t, p2):
-  for i, l in enumerate(s):
-    ok = True
-    for k, v in l.items():
-      if p2 and (k == 'cats' or k == 'trees'):
-        if v <= t[k]:
-          ok = False
-          break
-      elif p2 and (k == 'pomeranians' or k == 'goldfish'):
-        if v >= t[k]:
-          ok = False
-          break
-      elif v != t[k]:
-        ok = False
-        break
-    if ok:
-      return i + 1
-
-s = []
-for l in sys.stdin:
-  l = l.strip().split(' ')
-  d = {}
-  for j in range(2, len(l), 2):
-    k = l[j].replace(':', '')
-    v = int(l[j + 1].replace(',', ''))
-    d[k] = v
-  s.append(d)
-t = {
-    'children': 3,
-    'cats': 7,
-    'samoyeds': 2,
-    'pomeranians': 3,
-    'akitas': 0,
-    'vizslas': 0,
-    'goldfish': 5,
-    'trees': 3,
-    'cars': 2,
-    'perfumes': 1,
+weapons = {
+    'Dagger': (8, 4, 0),
+    'Shortsword': (10, 5, 0),
+    'Warhammer': (25, 6, 0),
+    'Longsword': (40, 7, 0),
+    'Greataxe': (74, 8, 0)
 }
-p2 = sys.argv[1] == '2'
-print(p(s, t, p2))
-```"""))
+
+armor = {
+    'None': (0, 0, 0),
+    'Leather': (13, 0, 1),
+    'Chainmail': (31, 0, 2),
+    'Splintmail': (53, 0, 3),
+    'Bandedmail': (75, 0, 4),
+    'Platemail': (102, 0, 5)
+}
+
+rings = {
+    'None1': (0, 0, 0),
+    'None2': (0, 0, 0),
+    'Damage +1': (25, 1, 0),
+    'Damage +2': (50, 2, 0),
+    'Damage +3': (100, 3, 0),
+    'Defense +1': (20, 0, 1),
+    'Defense +2': (40, 0, 2),
+    'Defense +3': (80, 0, 3)
+}
+
+def fight(player_hp, player_damage, player_armor, boss_hp, boss_damage, boss_armor):
+  while True:
+    boss_hp -= max(1, player_damage - boss_armor)
+    if boss_hp <= 0:
+      return 'Player'
+    player_hp -= max(1, boss_damage - player_armor)
+    if player_hp <= 0:
+      return 'Boss'
+
+def min_cost(boss_stats):
+  min_gold = float('inf')
+  for w in weapons.values():
+    for a in armor.values():
+      for r1, r2 in combinations(rings.values(), 2):
+        player_damage = w[1] + r1[1] + r2[1]
+        player_armor = w[2] + a[2] + r1[2] + r2[2]
+
+        cost = w[0] + a[0] + r1[0] + r2[0]
+
+        if fight(100, player_damage, player_armor, *boss_stats) == 'Player':
+          min_gold = min(min_gold, cost)
+  return min_gold
+
+boss_stats = [int(x.strip()) for x in sys.stdin.read().split(':')[1].split('\n')]
+print(min_cost(boss_stats))```"""))
