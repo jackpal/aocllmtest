@@ -4,7 +4,14 @@ import markdown_util
 from typing import List, Tuple
 
 def models() -> List[str]:
-    return ['gemini-exp-1206', 'gemini-2.0-flash-exp', 'gemini-2.0-flash-thinking-exp-1219']
+    return [
+        'gemini-exp-1206',
+        'gemini-2.0-flash-exp',
+        'gemini-2.0-flash-thinking-exp-1219',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-8b',
+        ]
 
 _configured = False
 _model_dict = dict()
@@ -39,8 +46,8 @@ def generate(model_name : str, prompt: str) -> Tuple[str, str]:
 
 
 def model_quota_timeout(model_name: str) -> int:
-    if model_name == 'gemini-exp-1206':
-        # We think the quota is 50 calls per day
+    if model_name in ['gemini-exp-1206', 'gemini-1.5-pro']:
+        # The quota is 50 calls per day
         return 24*3600/50
     else:
         # 1500 calls per day but 10 RPM. We don't know which quota we exhausted,
