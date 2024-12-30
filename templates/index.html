@@ -148,6 +148,35 @@
             {% endfor %}
         </tbody>
     </table>
+
+    <div>
+        <h2>Model Attempt Statistics</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Model Family</th>
+                    <th>Model</th>
+                    <th>Part 1 Attempts</th>
+                    <th>Part 2 Attempts</th>
+                    <th>Progress Percentage</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for model_family, models in model_attempt_stats.items() %}
+                    {% for model, stats in models.items() %}
+                        <tr>
+                            <td>{{ model_family }}</td>
+                            <td>{{ model }}</td>
+                            <td>{{ stats.part1_attempts }}</td>
+                            <td>{{ stats.part2_attempts }}</td>
+                            <td>{{ stats.remaining_percentage|round(1) }}%</td>
+                        </tr>
+                    {% endfor %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
     <div>
         <h2>Experiment Summary</h2>
         {% for year, year_data in summary_data.items() %}

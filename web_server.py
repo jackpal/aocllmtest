@@ -97,6 +97,58 @@ def calculate_summary_data():
     conn.close()
     return summary_data, totals, model_families, models
 
+def calculate_model_attempt_stats():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all model families and models
+    cursor.execute("SELECT model_family, model_name FROM Models")
+    models_data = cursor.fetchall()
+
+    model_stats = {}
+
+    for row in models_data:
+        model_family = row['model_family']
+        model_name = row['model_name']
+
+        # Get the number of Part 1 attempts
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM Experiments
+            WHERE model_family = ? AND model_name = ? AND puzzle_part = 1
+        """, (model_family, model_name))
+        part1_attempts = cursor.fetchone()[0]
+
+        # Get the number of Part 2 attempts
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM Experiments
+            WHERE model_family = ? AND model_name = ? AND puzzle_part = 2
+        """, (model_family, model_name))
+        part2_attempts = cursor.fetchone()[0]
+
+        # Get the number of correct Part 1 answers
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM Experiments
+            WHERE model_family = ? AND model_name = ? AND puzzle_part = 1 AND answer_is_correct = 1
+        """, (model_family, model_name))
+        part1_correct_answers = cursor.fetchone()[0]
+
+        # Calculate the remaining percentage based on the given formula
+        remaining_percentage = ((part1_attempts + part2_attempts) / (25 * 10 + part1_correct_answers)) * 100 if (25 * 10 + part1_correct_answers) > 0 else 0
+
+        if model_family not in model_stats:
+            model_stats[model_family] = {}
+        model_stats[model_family][model_name] = {
+            "part1_attempts": part1_attempts,
+            "part2_attempts": part2_attempts,
+            "remaining_percentage": remaining_percentage
+        }
+
+    conn.close()
+    return model_stats
+
 @app.route('/')
 def index():
     conn = get_db_connection()
@@ -135,6 +187,7 @@ def index():
     year_ranks = cursor.fetchall()
 
     summary_data, totals, model_families, models = calculate_summary_data()
+    model_attempt_stats = calculate_model_attempt_stats()
 
     conn.close()
 
@@ -150,7 +203,8 @@ def index():
         summary_data=summary_data,
         totals=totals,
         model_families=model_families,
-        models=models
+        models=models,
+        model_attempt_stats=model_attempt_stats
     )
 
 if __name__ == '__main__':
