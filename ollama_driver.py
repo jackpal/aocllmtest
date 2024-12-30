@@ -1,6 +1,13 @@
 import markdown_util
 import ollama
-from typing import Tuple
+from typing import List, Tuple
+
+def models() -> List[str]:
+    return [
+        'gemma2:27b',
+        'llama3.3',
+        'qwen2.5-coder:32b',
+        ]
 
 def generate(model_name : str, prompt: str) -> Tuple[str, str]:
     response = ollama.chat(

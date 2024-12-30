@@ -27,7 +27,7 @@ def models(model_family: str) -> List[str]:
     if model_family == "Gemini":
         return gemini_driver.models()
     elif model_family == "ollama":
-        return ["llama3.3", "qwen2.5-coder:32b"]
+        return ollama_driver.models()
     else:
         return []
 
