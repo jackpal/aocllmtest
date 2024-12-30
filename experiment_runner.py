@@ -229,6 +229,60 @@ def get_next_puzzle_to_solve(cursor, timed_out_models):
     else:
         return None, more_puzzles_available  # Indicates no more puzzles to solve right now
 
+def run_experiment():
+    """Runs the experiment, processing one puzzle at a time."""
+    conn = create_or_open_puzzle_db()
+    cursor = conn.cursor()
+
+    while True:
+        # Check for quota timeouts for all model families
+        cursor.execute("SELECT model_name FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
+        timed_out_models = [row[0] for row in cursor.fetchall()]
+
+        # Get the next puzzle to solve
+        next_puzzle, more_puzzles_available = get_next_puzzle_to_solve(cursor, timed_out_models)
+        if next_puzzle is None:
+            if more_puzzles_available:
+                # Find the earliest timeout expiry among timed-out models.
+                cursor.execute("SELECT MIN(timeout_until) FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
+                next_available_time_str = cursor.fetchone()[0]
+
+                if next_available_time_str is not None:
+                    # Convert the string to a datetime object.
+                    next_available_time = datetime.datetime.fromisoformat(next_available_time_str)
+
+                    # Calculate sleep duration based on the earliest timeout.
+                    sleep_duration = max(0, (next_available_time - datetime.datetime.now()).total_seconds())
+                    print(f"All models are timed out. Sleeping for {sleep_duration:.0f} seconds (until {next_available_time}).")
+                    time.sleep(sleep_duration)
+                    continue
+                else:
+                    print("Warning: Could not determine the next available time. Retrying after a short delay.")
+                    time.sleep(60)
+                    continue
+            else:
+                print("All puzzles have been attempted.")
+                break  # Exit the loop if no more puzzles
+
+        puzzle_year, puzzle_day, puzzle_part, model_family, model_name = next_puzzle
+
+        # Run the experiment for the selected puzzle
+        print(f"Attempting puzzle {puzzle_year}/{puzzle_day}/{puzzle_part} with model {model_family}/{model_name}")
+        result = run_experiment_for_puzzle(puzzle_year, puzzle_day, puzzle_part, model_family, model_name)
+
+        # If a quota error occurred, handle it
+        if result == 'quota_error':
+            print(f"Quota exhausted for {model_name}. Recording timeout and skipping.")
+            cursor.execute("INSERT OR REPLACE INTO QuotaTimeouts (model_name, timeout_until) VALUES (?, ?)",
+                           (model_name, datetime.datetime.now() + datetime.timedelta(seconds=model_quota_timeout(model_family, model_name))))
+            conn.commit()
+            # Don't continue here, so we can update ranking tables
+
+        # Update the ranking tables after each puzzle attempt
+        update_ranking_tables(conn)
+
+    conn.close()
+    
 def run_experiment_for_puzzle(puzzle_year, puzzle_day, puzzle_part, model_family, model_name):
     """Runs the experiment for a single puzzle."""
     conn = create_or_open_puzzle_db()
@@ -324,57 +378,6 @@ def run_experiment_for_puzzle(puzzle_year, puzzle_day, puzzle_part, model_family
 
     conn.close()
     return 'success' # Indicate that the experiment completed (or was skipped)
-
-def run_experiment():
-    """Runs the experiment, processing one puzzle at a time."""
-    conn = create_or_open_puzzle_db()
-    cursor = conn.cursor()
-
-    while True:
-        # Check for quota timeouts for all model families
-        cursor.execute("SELECT model_name FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
-        timed_out_models = [row[0] for row in cursor.fetchall()]
-
-        # Get the next puzzle to solve
-        next_puzzle, more_puzzles_available = get_next_puzzle_to_solve(cursor, timed_out_models)
-        if next_puzzle is None:
-            if more_puzzles_available:
-                # Find the earliest timeout expiry among timed-out models.
-                cursor.execute("SELECT MIN(timeout_until) FROM QuotaTimeouts")
-                next_available_time_str = cursor.fetchone()[0]
-
-                if next_available_time_str is not None:
-                    # Convert the string to a datetime object.
-                    next_available_time = datetime.datetime.fromisoformat(next_available_time_str)
-
-                    # Calculate sleep duration based on the earliest timeout.
-                    sleep_duration = max(0, (next_available_time - datetime.datetime.now()).total_seconds())
-                    print(f"All models are timed out. Sleeping for {sleep_duration:.0f} seconds (until {next_available_time}).")
-                    time.sleep(sleep_duration)
-                    continue
-                else:
-                    print("Warning: Could not determine the next available time. Retrying after a short delay.")
-                    time.sleep(60)
-                    continue
-            else:
-                print("All puzzles have been attempted.")
-                break  # Exit the loop if no more puzzles
-
-        puzzle_year, puzzle_day, puzzle_part, model_family, model_name = next_puzzle
-
-        # Run the experiment for the selected puzzle
-        print(f"Attempting puzzle {puzzle_year}/{puzzle_day}/{puzzle_part} with model {model_family}/{model_name}")
-        result = run_experiment_for_puzzle(puzzle_year, puzzle_day, puzzle_part, model_family, model_name)
-
-        # If a quota error occurred, handle it
-        if result == 'quota_error':
-            print(f"Recording timeout for model {model_name} and skipping.")
-            # Don't continue here, so we can update ranking tables
-
-        # Update the ranking tables after each puzzle attempt
-        update_ranking_tables(conn)
-
-    conn.close()
             
 def update_ranking_tables(conn):
     """Updates the ModelRank, ModelFamilyRank, and YearRank tables based on experiment results."""
