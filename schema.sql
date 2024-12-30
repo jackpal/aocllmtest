@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS Experiments (
 );
 
 CREATE TABLE IF NOT EXISTS QuotaTimeouts (
-    model_family TEXT PRIMARY KEY,
+    model_name TEXT PRIMARY KEY,
     timeout_until TIMESTAMP NOT NULL
 );
 

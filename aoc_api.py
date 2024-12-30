@@ -99,6 +99,16 @@ def generate_program(model_family: str, model_name: str, full_prompt: str, puzzl
     else:
         raise Exception(f'Unknown model family {model_family}')
 
+def model_quota_timeout(model_family: str, model_name: str) -> int:
+    if model_family == 'Gemini':
+        return gemini_driver.model_quota_timeout(model_name)
+    elif model_family == 'ollama':
+        return ollama_driver.model_quota_timeout(model_name)
+    else:
+        raise Exception(f'Unknown model family {model_family}')
+
+
+
 def run_program(puzzle_year: int, puzzle_day: int, puzzle_part: int, program: str, timeout: int) -> Tuple[str, Union[str, int]]:
     """Tests the program in a safe environment.
 

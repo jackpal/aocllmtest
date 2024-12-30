@@ -16,3 +16,5 @@ def generate(model_name : str, prompt: str) -> Tuple[str, str]:
         return ('success', result)
     return ('failure', text)
 
+def model_quota_timeout(model_name: str) -> int:
+    return 10

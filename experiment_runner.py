@@ -4,7 +4,15 @@ import datetime
 from aoc_api import *
 from db_util import create_or_open_puzzle_db
 
-def get_next_puzzle_to_solve(cursor, timed_out_families):
+import sqlite3
+import time
+import datetime
+from aoc_api import *
+from db_util import create_or_open_puzzle_db
+import concurrent.futures
+import argparse
+
+def get_next_puzzle_to_solve(cursor, timed_out_models):
     """
     Determines the next puzzle to solve based on the prioritization rules.
     Returns a tuple: (next_puzzle, more_puzzles_available)
@@ -37,7 +45,7 @@ def get_next_puzzle_to_solve(cursor, timed_out_families):
         latest_year, latest_day, latest_part = 2024, 0, 0
 
     # Construct the query with timed-out families excluded
-    timed_out_placeholders = ','.join(['?'] * len(timed_out_families))
+    timed_out_placeholders = ','.join(['?'] * len(timed_out_models))
 
     # Use f-string to safely incorporate the placeholders into the query
     query = f"""
@@ -121,12 +129,12 @@ def get_next_puzzle_to_solve(cursor, timed_out_families):
             AND ve.puzzle_year = y.puzzle_year
             AND ve.puzzle_day = d.puzzle_day
         ))
-        AND m.model_family NOT IN ({timed_out_placeholders})
+        AND m.model_name NOT IN ({timed_out_placeholders})
         LIMIT 1
     """
 
     # Execute the query, passing in the timed_out_families list
-    cursor.execute(query, timed_out_families)
+    cursor.execute(query, timed_out_models)
 
     next_puzzle = cursor.fetchone()
 
@@ -220,7 +228,7 @@ def get_next_puzzle_to_solve(cursor, timed_out_families):
         return (puzzle_year, puzzle_day, puzzle_part, model_family, model_name), more_puzzles_available
     else:
         return None, more_puzzles_available  # Indicates no more puzzles to solve right now
-    
+
 def run_experiment_for_puzzle(puzzle_year, puzzle_day, puzzle_part, model_family, model_name):
     """Runs the experiment for a single puzzle."""
     conn = create_or_open_puzzle_db()
@@ -257,20 +265,20 @@ def run_experiment_for_puzzle(puzzle_year, puzzle_day, puzzle_part, model_family
         )
 
         if generate_result[0] == 'quota':
-            print(f"Quota exhausted for {model_family}: {generate_result[1]}")
-            # We should not insert a row into Experiments here
-            # because we have not yet generated a program.
+            print(f"Quota exhausted for {model_name}: {generate_result[1]}")
+            timeout_seconds = model_quota_timeout(model_family, model_name)
+            cursor.execute("INSERT OR REPLACE INTO QuotaTimeouts (model_name, timeout_until) VALUES (?, ?)",
+                           (model_name, datetime.datetime.now() + datetime.timedelta(seconds=timeout_seconds)))
+            conn.commit()
             conn.close()
             return 'quota_error'
         elif generate_result[0] == 'error':
             print(f"Error generating program: {generate_result[1]}")
-            # We should not insert a row into Experiments here
-            # because we have not yet generated a program.
             break  # Exit timeout loop, move on to next puzzle
         elif generate_result[0] == 'success':
             program = generate_result[1]
 
-        # Insert experiment record *after* successful program generation
+        # Use INSERT OR IGNORE to avoid uniqueness constraint violation on timeout retries
         cursor.execute("""
             INSERT OR IGNORE INTO Experiments (
                 model_family, model_name, puzzle_year, puzzle_day, puzzle_part,
@@ -324,18 +332,14 @@ def run_experiment():
 
     while True:
         # Check for quota timeouts for all model families
-        cursor.execute("SELECT model_family FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
-        timed_out_families = [row[0] for row in cursor.fetchall()]
+        cursor.execute("SELECT model_name FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
+        timed_out_models = [row[0] for row in cursor.fetchall()]
 
         # Get the next puzzle to solve
-        next_puzzle, more_puzzles_available = get_next_puzzle_to_solve(cursor, timed_out_families)
-
+        next_puzzle, more_puzzles_available = get_next_puzzle_to_solve(cursor, timed_out_models)
         if next_puzzle is None:
-            if not more_puzzles_available:
-                print("All puzzles have been attempted.")
-                break  # Exit the loop if no more puzzles
-            else:
-                # Find the earliest timeout expiry among timed-out families.
+            if more_puzzles_available:
+                # Find the earliest timeout expiry among timed-out models.
                 cursor.execute("SELECT MIN(timeout_until) FROM QuotaTimeouts")
                 next_available_time_str = cursor.fetchone()[0]
 
@@ -345,13 +349,16 @@ def run_experiment():
 
                     # Calculate sleep duration based on the earliest timeout.
                     sleep_duration = max(0, (next_available_time - datetime.datetime.now()).total_seconds())
-                    print(f"All model families are timed out. Sleeping for {sleep_duration:.0f} seconds (until {next_available_time}).")
+                    print(f"All models are timed out. Sleeping for {sleep_duration:.0f} seconds (until {next_available_time}).")
                     time.sleep(sleep_duration)
                     continue
                 else:
                     print("Warning: Could not determine the next available time. Retrying after a short delay.")
                     time.sleep(60)
                     continue
+            else:
+                print("All puzzles have been attempted.")
+                break  # Exit the loop if no more puzzles
 
         puzzle_year, puzzle_day, puzzle_part, model_family, model_name = next_puzzle
 
@@ -361,17 +368,14 @@ def run_experiment():
 
         # If a quota error occurred, handle it
         if result == 'quota_error':
-            print(f"Quota exhausted for {model_family}. Recording timeout and skipping.")
-            cursor.execute("INSERT OR REPLACE INTO QuotaTimeouts (model_family, timeout_until) VALUES (?, ?)",
-                           (model_family, datetime.datetime.now() + datetime.timedelta(hours=1)))
-            conn.commit()
+            print(f"Recording timeout for model {model_name} and skipping.")
             # Don't continue here, so we can update ranking tables
 
         # Update the ranking tables after each puzzle attempt
         update_ranking_tables(conn)
 
     conn.close()
-        
+            
 def update_ranking_tables(conn):
     """Updates the ModelRank, ModelFamilyRank, and YearRank tables based on experiment results."""
     cursor = conn.cursor()

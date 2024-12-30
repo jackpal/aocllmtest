@@ -15,9 +15,12 @@ def calculate_summary_data():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Get all model families
+    # Get all model families and models
     cursor.execute("SELECT model_family FROM ModelFamilies")
     model_families = [row['model_family'] for row in cursor.fetchall()]
+
+    cursor.execute("SELECT model_name FROM Models")
+    models = [row['model_name'] for row in cursor.fetchall()]
 
     # Get all years
     cursor.execute("SELECT DISTINCT puzzle_year FROM Experiments ORDER BY puzzle_year")
@@ -35,9 +38,9 @@ def calculate_summary_data():
 
             # Get models for this model_family
             cursor.execute("SELECT model_name FROM Models WHERE model_family = ?", (model_family,))
-            models = [row['model_name'] for row in cursor.fetchall()]
+            models_in_family = [row['model_name'] for row in cursor.fetchall()]
 
-            for model in models:
+            for model in models_in_family:
                 summary_data[year][model_family][model] = {}
 
                 for part in [1, 2]:
@@ -97,7 +100,7 @@ def calculate_summary_data():
     conn.close()
     return summary_data, totals, model_families, models
 
-def calculate_model_attempt_stats():
+def calculate_remaining_percentages():
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -105,49 +108,72 @@ def calculate_model_attempt_stats():
     cursor.execute("SELECT model_family, model_name FROM Models")
     models_data = cursor.fetchall()
 
-    model_stats = {}
+    # Get the total number of possible experiments (Part 1 puzzles only)
+    total_possible_experiments = 0
+    cursor.execute("SELECT COUNT(DISTINCT puzzle_year) FROM Experiments")
+    num_years = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(DISTINCT puzzle_day) FROM Experiments WHERE puzzle_day <> 25")
+    num_days = cursor.fetchone()[0]
+    total_possible_experiments = num_years * num_days  # Only count Part 1 puzzles
+
+    remaining_percentages = {}
 
     for row in models_data:
         model_family = row['model_family']
         model_name = row['model_name']
 
-        # Get the number of Part 1 attempts
+        # Get the number of Part 1 puzzles attempted (correct or incorrect)
         cursor.execute("""
             SELECT COUNT(*)
-            FROM Experiments
-            WHERE model_family = ? AND model_name = ? AND puzzle_part = 1
-        """, (model_family, model_name))
-        part1_attempts = cursor.fetchone()[0]
+            FROM (
+                SELECT DISTINCT puzzle_year, puzzle_day
+                FROM Experiments
+                WHERE model_family = ? AND model_name = ? AND puzzle_part = 1
+                AND NOT answer_is_correct = 1
+                UNION
+                SELECT DISTINCT puzzle_year, puzzle_day
+                FROM Experiments
+                WHERE model_family = ? AND model_name = ? AND puzzle_part = 1
+                AND answer_is_correct = 1
+                AND NOT EXISTS (SELECT 1 from Experiments
+                                  WHERE model_family = ?
+                                  AND model_name = ?
+                                  AND puzzle_year = Experiments.puzzle_year
+                                  AND puzzle_day = Experiments.puzzle_day
+                                  AND puzzle_part = 2)
+            ) AS distinct_part1_attempts
+        """, (model_family, model_name, model_family, model_name, model_family, model_name))
+        part1_available_count = cursor.fetchone()[0]
 
-        # Get the number of Part 2 attempts
+        # Get the number of Part 2 puzzles attempted where Part 1 was successful
         cursor.execute("""
             SELECT COUNT(*)
-            FROM Experiments
-            WHERE model_family = ? AND model_name = ? AND puzzle_part = 2
+            FROM (
+                SELECT DISTINCT e2.puzzle_year, e2.puzzle_day
+                FROM Experiments e1
+                INNER JOIN Experiments e2
+                    ON e1.model_family = e2.model_family
+                    AND e1.model_name = e2.model_name
+                    AND e1.puzzle_year = e2.puzzle_year
+                    AND e1.puzzle_day = e2.puzzle_day
+                WHERE e1.model_family = ?
+                AND e1.model_name = ?
+                AND e1.puzzle_part = 1
+                AND e1.answer_is_correct = 1
+                AND e2.puzzle_part = 2
+            ) AS valid_part2_attempts
         """, (model_family, model_name))
-        part2_attempts = cursor.fetchone()[0]
+        part2_attempted_count = cursor.fetchone()[0]
 
-        # Get the number of correct Part 1 answers
-        cursor.execute("""
-            SELECT COUNT(*)
-            FROM Experiments
-            WHERE model_family = ? AND model_name = ? AND puzzle_part = 1 AND answer_is_correct = 1
-        """, (model_family, model_name))
-        part1_correct_answers = cursor.fetchone()[0]
+        remaining_count = part1_available_count
+        remaining_percentage = (remaining_count / total_possible_experiments) * 100 if total_possible_experiments > 0 else 0
 
-        # Calculate the remaining percentage based on the given formula
-        remaining_percentage = ((part1_attempts + part2_attempts) / (25 * 10 + part1_correct_answers)) * 100 if (25 * 10 + part1_correct_answers) > 0 else 0
-
-        if model_family not in model_stats:
-            model_stats[model_family] = {}
-        model_stats[model_family][model_name] = {
-            "part1_attempts": part1_attempts,
-            "part2_attempts": part2_attempts,
-            "remaining_percentage": remaining_percentage
-        }
+        if model_family not in remaining_percentages:
+            remaining_percentages[model_family] = {}
+        remaining_percentages[model_family][model_name] = remaining_percentage
 
     conn.close()
-    return model_stats
+    return remaining_percentages
 
 @app.route('/')
 def index():
@@ -158,13 +184,13 @@ def index():
     cursor.execute("""
         SELECT e.*, q.timeout_until
         FROM Experiments e
-        LEFT JOIN QuotaTimeouts q ON e.model_family = q.model_family
+        LEFT JOIN QuotaTimeouts q ON e.model_name = q.model_name
         WHERE e.experiment_started_at = (SELECT MAX(experiment_started_at) FROM Experiments)
     """)
     current_experiment = cursor.fetchone()
 
     # Check if currently waiting due to quota exhaustion
-    cursor.execute("SELECT model_family, timeout_until FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
+    cursor.execute("SELECT model_name, timeout_until FROM QuotaTimeouts WHERE timeout_until > ?", (datetime.datetime.now(),))
     quota_status = cursor.fetchall()
 
     # Get counts of experiments
@@ -187,7 +213,7 @@ def index():
     year_ranks = cursor.fetchall()
 
     summary_data, totals, model_families, models = calculate_summary_data()
-    model_attempt_stats = calculate_model_attempt_stats()
+    remaining_percentages = calculate_remaining_percentages()
 
     conn.close()
 
@@ -204,7 +230,7 @@ def index():
         totals=totals,
         model_families=model_families,
         models=models,
-        model_attempt_stats=model_attempt_stats
+        remaining_percentages=remaining_percentages
     )
 
 if __name__ == '__main__':

@@ -34,6 +34,15 @@ def generate(model_name : str, prompt: str) -> Tuple[str, str]:
     return ('failure', text)
 
 
+def model_quota_timeout(model_name: str) -> int:
+    if model_name == 'gemini-exp-1206':
+        # We think the quota is 50 calls per day
+        return 24*3600/50
+    else:
+        # 1500 calls per day but 10 RPM. We don't know which quota we exhausted,
+        # assume it's the longer one.
+        return max(24*3600/1500, 60/10)
+
 if __name__ == "__main__":
     for model in models():
         print(model, generate(model, 'what Gemini model are you?'))
