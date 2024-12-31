@@ -8,3 +8,5 @@ markdown
 networkx
 numpy
 ollama
+pandas
+seaborn
