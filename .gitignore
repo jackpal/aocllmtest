@@ -1,6 +1,6 @@
 .DS_Store
 __pycache__
-puzzle.db
 report.csv
 stderr.txt
 stdout.txt
+results.csv
