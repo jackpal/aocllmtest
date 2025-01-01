@@ -17,18 +17,8 @@ def create_yearly_performance_chart(db_name="puzzle.db"):
         SELECT
             model_name,
             puzzle_year,
-            CAST(SUM(CASE WHEN answer_is_correct = 1 THEN 1 ELSE 0 END) AS REAL) * 100 / 
-            (
-                SELECT COUNT(*)
-                FROM (
-                    SELECT DISTINCT puzzle_day, puzzle_part
-                    FROM Experiments
-                    WHERE puzzle_year = e.puzzle_year
-                    AND puzzle_day <> 25
-                )
-            ) as correct_percentage
+            CAST(SUM(CASE WHEN answer_is_correct = 1 THEN 1 ELSE 0 END) AS REAL) * 100 / 49 as correct_percentage
         FROM Experiments e
-        WHERE puzzle_day <> 25
         GROUP BY model_name, puzzle_year
         ORDER BY puzzle_year, model_name
     """

@@ -26,7 +26,7 @@ def create_stacked_status_chart_2024(db_name="puzzle.db"):
                 ELSE 'not_attempted'
             END as status
         FROM Experiments
-        WHERE puzzle_day <> 25 AND puzzle_year = 2024
+        WHERE puzzle_year = 2024
     """
 
     # Load data into pandas DataFrame
