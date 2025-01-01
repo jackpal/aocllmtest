@@ -49,7 +49,7 @@ def create_stacked_status_chart_2024(db_name="puzzle.db"):
     df_pivot = df_pivot.apply(lambda x: (x / 49) * 100, axis=1)
 
     # Sort by correct percentage for better visualization
-    df_pivot.sort_values(by='correct', ascending=True, inplace=True)
+    df_pivot.sort_values(by=['correct', 'incorrect', 'timeout', 'error'], inplace=True)
 
     # Create the stacked bar plot using pandas plotting
     plt.figure(figsize=(14, 8))
@@ -64,9 +64,10 @@ def create_stacked_status_chart_2024(db_name="puzzle.db"):
     ax.set_ylabel('Model Name', fontsize=14)
     ax.legend(title='Status', title_fontsize='13', loc='lower right')
 
-    # Add value labels to the bars
+    # Add value labels to the bars, only if the value is >= 0.1%
     for container in ax.containers:
-        ax.bar_label(container, fmt='%.1f%%', label_type='center')
+        labels = [f'{w:.1f}%' if (w := v.get_width()) >= 0.1 else '' for v in container]
+        ax.bar_label(container, labels=labels, label_type='center')
 
     plt.tight_layout()
     plt.savefig("model_status_stacked_chart_2024.png")
