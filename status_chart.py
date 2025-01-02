@@ -59,18 +59,18 @@ def create_stacked_status_chart_2024(db_name="puzzle.db"):
     ax = df_pivot.plot(kind='barh', stacked=True, color=sns.color_palette("Set2"), ax=plt.gca())
 
     # Customize the plot
-    ax.set_title('Model Performance by Status (2024)', fontsize=16)
-    ax.set_xlabel('Percentage of Total Puzzles (49 Possible)', fontsize=14)
+    ax.set_title('One-shot Model Performance 2024', fontsize=16)
+    ax.set_xlabel('Puzzles %', fontsize=14)
     ax.set_ylabel('Model Name', fontsize=14)
     ax.legend(title='Status', title_fontsize='13', loc='lower right')
 
     # Add value labels to the bars, only if the value is >= 0.1%
     for container in ax.containers:
-        labels = [f'{w:.1f}%' if (w := v.get_width()) >= 0.1 else '' for v in container]
+        labels = [f'{w:.1f}' if (w := v.get_width()) >= 0.1 else '' for v in container]
         ax.bar_label(container, labels=labels, label_type='center')
 
     plt.tight_layout()
-    plt.savefig("model_status_stacked_chart_2024.png")
+    plt.savefig("one_shot_model_performance_2024.png")
     plt.show()
 
 if __name__ == "__main__":
